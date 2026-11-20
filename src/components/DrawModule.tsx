@@ -15,6 +15,7 @@ import {
   Lock,
   GripVertical,
   FileDown,
+  Undo2,
 } from "lucide-react";
 import { Player, Team, TournamentDB } from "@/types/tournament";
 import {
@@ -195,7 +196,65 @@ export function DrawModule({
     });
   };
 
+  const handleUndoLastBall = () => {
+    if (isSpinning || db.draw.drawnPlayerIds.length === 0) return;
+    onUpdateDB((prev) => {
+      if (prev.draw.drawnPlayerIds.length === 0) return prev;
+      const lastPlayerId =
+        prev.draw.drawnPlayerIds[prev.draw.drawnPlayerIds.length - 1];
+      const nextDrawn = prev.draw.drawnPlayerIds.slice(0, -1);
+
+      const nextTeams = prev.teams.map((t) => ({
+        ...t,
+        playerIds: t.playerIds.filter((pid) => pid !== lastPlayerId),
+      }));
+
+      // Compute previous lastDrawn banner (if any players remain drawn)
+      let nextLastDrawn: TournamentDB["draw"]["lastDrawn"] = null;
+      if (nextDrawn.length > 0) {
+        const prevPlayerId = nextDrawn[nextDrawn.length - 1];
+        const prevTeam = nextTeams.find((t) =>
+          t.playerIds.includes(prevPlayerId)
+        );
+        const prevPot = prev.draw.pots.find((pot) =>
+          pot.playerIds.includes(prevPlayerId)
+        );
+        if (prevTeam) {
+          nextLastDrawn = {
+            playerId: prevPlayerId,
+            teamId: prevTeam.id,
+            potNumber: prevPot?.number ?? 1,
+          };
+        }
+      }
+
+      const drawnSet = new Set(nextDrawn);
+      const nextPotIdx = prev.draw.pots.findIndex((pot) =>
+        pot.playerIds.some((pid) => !drawnSet.has(pid))
+      );
+
+      return {
+        ...prev,
+        teams: nextTeams,
+        draw: {
+          ...prev.draw,
+          drawnPlayerIds: nextDrawn,
+          currentPotIndex: nextPotIdx >= 0 ? nextPotIdx : 0,
+          isComplete: false,
+          lastDrawn: nextLastDrawn,
+        },
+      };
+    });
+  };
+
   const handleResetDraw = () => {
+    if (
+      !window.confirm(
+        "¿Reiniciar todo el sorteo? Todos los jugadores volverán a sus bombos."
+      )
+    ) {
+      return;
+    }
     onUpdateDB((prev) => ({
       ...prev,
       teams: prev.teams.map((t) => ({ ...t, playerIds: [] })),
@@ -784,6 +843,17 @@ export function DrawModule({
 
                   {/* Secondary Organizer Actions */}
                   <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                    {totalDrawn > 0 && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={isSpinning}
+                        onClick={handleUndoLastBall}
+                      >
+                        <Undo2 className="h-3.5 w-3.5 text-[#F5CE78]" />
+                        Deshacer última bolilla
+                      </Button>
+                    )}
                     {totalDrawn > 1 && (
                       <Button
                         size="sm"
