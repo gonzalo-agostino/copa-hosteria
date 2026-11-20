@@ -8,7 +8,6 @@ import {
   Users,
   Lock,
   Unlock,
-  RotateCcw,
 } from "lucide-react";
 import { TournamentDB } from "@/types/tournament";
 import { CopaCrest } from "@/components/CopaCrest";
@@ -134,21 +133,6 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
     [persistDB]
   );
 
-  const handleResetAll = async () => {
-    if (
-      !window.confirm(
-        "¿Reiniciar toda la 4° Edición a los datos precargados (42 convocados + histórico 2025)?"
-      )
-    ) {
-      return;
-    }
-    const res = await fetch("/api/state", { method: "DELETE" });
-    if (res.ok) {
-      const fresh = (await res.json()) as TournamentDB;
-      setDb(fresh);
-    }
-  };
-
   const navItems: { id: MainTab; label: string; icon: React.ElementType }[] = [
     { id: "sorteo", label: "Sorteo", icon: Dices },
     { id: "partidos", label: "Partidos", icon: CalendarDays },
@@ -194,16 +178,6 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {isOrganizer && (
-              <button
-                type="button"
-                onClick={handleResetAll}
-                title="Restaurar datos precargados"
-                className="hidden sm:inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-blue-100/85 transition hover:bg-white/14 hover:text-white cursor-pointer"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </button>
-            )}
             <button
               type="button"
               onClick={() => setPinModalOpen(true)}
