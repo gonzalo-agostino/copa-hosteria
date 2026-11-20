@@ -148,7 +148,8 @@ export const SEED_PLAYERS: Player[] = [
 
 export function buildSuggestedPots(players: Player[], teamCount: number): Pot[] {
   const activePlayers = players.filter((p) => p.convocadoActual);
-  const potCount = Math.max(1, Math.ceil(activePlayers.length / teamCount));
+  // Remainder players join the last pot instead of creating a tiny extra pot
+  const potCount = Math.max(1, Math.floor(activePlayers.length / teamCount));
 
   // Rank by stars first, then 2025 goals, then alphabetical
   const ranked = [...activePlayers].sort((a, b) => {
