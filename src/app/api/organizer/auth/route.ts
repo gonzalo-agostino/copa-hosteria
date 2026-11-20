@@ -22,14 +22,24 @@ export async function GET(request: NextRequest) {
     const record = db.security?.failedAttemptsByIp?.[ip];
     const count = record?.count ?? 0;
     const blocked = Boolean(record?.blocked || count >= MAX_ATTEMPTS);
-    const blockedCount = Object.values(
+    const allEntries = Object.entries(
       db.security?.failedAttemptsByIp ?? {}
-    ).filter((r) => r.blocked || r.count >= MAX_ATTEMPTS).length;
+    )
+      .map(([entryIp, rec]) => ({
+        ip: entryIp,
+        count: rec.count,
+        blocked: Boolean(rec.blocked || rec.count >= MAX_ATTEMPTS),
+        lastAttemptAt: rec.lastAttemptAt,
+      }))
+      .sort((a, b) => b.lastAttemptAt.localeCompare(a.lastAttemptAt));
+
+    const blockedCount = allEntries.filter((e) => e.blocked).length;
 
     return NextResponse.json({
       blocked,
       remainingAttempts: Math.max(0, MAX_ATTEMPTS - count),
       blockedCount,
+      attempts: allEntries,
     });
   } catch (err) {
     console.error("Error checking organizer auth status:", err);

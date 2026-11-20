@@ -13,6 +13,13 @@ import { Button } from "@/components/ui/button";
 
 const LOCAL_BLOCK_KEY = "copa_hosteria_org_blocked_v1";
 
+interface AttemptEntry {
+  ip: string;
+  count: number;
+  blocked: boolean;
+  lastAttemptAt: string;
+}
+
 interface OrganizerPinModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,6 +40,7 @@ export function OrganizerPinModal({
   const [isBlocked, setIsBlocked] = useState(false);
   const [remainingAttempts, setRemainingAttempts] = useState(3);
   const [blockedCount, setBlockedCount] = useState(0);
+  const [attempts, setAttempts] = useState<AttemptEntry[]>([]);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,9 +61,11 @@ export function OrganizerPinModal({
             blocked?: boolean;
             remainingAttempts?: number;
             blockedCount?: number;
+            attempts?: AttemptEntry[];
           };
           const serverBlocked = Boolean(data.blocked);
           setBlockedCount(data.blockedCount ?? 0);
+          setAttempts(data.attempts ?? []);
 
           if (serverBlocked) {
             setIsBlocked(true);
@@ -168,6 +178,7 @@ export function OrganizerPinModal({
     const res = await fetch("/api/organizer/auth", { method: "DELETE" });
     if (res.ok) {
       setBlockedCount(0);
+      setAttempts([]);
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(LOCAL_BLOCK_KEY);
       }
@@ -215,16 +226,68 @@ export function OrganizerPinModal({
             <div className="rounded-2xl border border-[#D49B35]/30 bg-[#D49B35]/10 p-3.5 text-sm text-[#F0C46B]">
               Modo Organizador desbloqueado. Volvé a Vista Pública cuando termines de cargar la fecha.
             </div>
-            {blockedCount > 0 && (
-              <Button
-                variant="outline"
-                size="default"
-                className="w-full"
-                onClick={handleClearBlockedDevices}
-              >
-                Desbloquear dispositivos bloqueados ({blockedCount})
-              </Button>
-            )}
+
+            {/* Failed PIN Attempts Audit List */}
+            <div className="rounded-2xl border border-white/12 bg-[#071433]/80 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-blue-100/90">
+                  Intentos fallidos de PIN
+                </p>
+                <span className="text-[11px] font-semibold text-[#F5CE78]">
+                  {attempts.length} reg. · {blockedCount} bloq.
+                </span>
+              </div>
+
+              {attempts.length === 0 ? (
+                <p className="text-xs text-blue-200/60">
+                  Nadie intentó ingresar con un PIN incorrecto todavía.
+                </p>
+              ) : (
+                <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+                  {attempts.map((a) => (
+                    <div
+                      key={a.ip}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#143275]/45 px-2.5 py-2 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-mono font-bold text-white">
+                          {a.ip}
+                        </p>
+                        <p className="text-[10px] text-blue-200/70">
+                          {new Date(a.lastAttemptAt).toLocaleString("es-AR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          a.blocked
+                            ? "bg-red-500/25 text-red-200 border border-red-400/40"
+                            : "bg-amber-400/20 text-amber-200 border border-amber-400/35"
+                        }`}
+                      >
+                        {a.blocked ? "BLOQUEADO (3/3)" : `${a.count}/3 fallos`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {attempts.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleClearBlockedDevices}
+                >
+                  Limpiar registro y desbloquear todos
+                </Button>
+              )}
+            </div>
+
             <Button
               variant="secondary"
               size="lg"
