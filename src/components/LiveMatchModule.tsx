@@ -307,13 +307,6 @@ export function LiveMatchModule({
   };
 
   const handleClearPlayoffs = () => {
-    if (
-      !window.confirm(
-        "¿Reiniciar el cuadro de Playoffs? Se eliminarán los partidos mata-mata."
-      )
-    ) {
-      return;
-    }
     onUpdateDB((prev) => ({
       ...prev,
       matches: prev.matches.filter((m) => m.stage !== "playoff"),

@@ -260,13 +260,6 @@ export function DrawModule({
   };
 
   const handleResetDraw = () => {
-    if (
-      !window.confirm(
-        "¿Reiniciar todo el sorteo? Todos los jugadores volverán a sus bombos."
-      )
-    ) {
-      return;
-    }
     onUpdateDB((prev) => ({
       ...prev,
       teams: prev.teams.map((t) => ({ ...t, playerIds: [], captainId: null })),

@@ -286,14 +286,7 @@ export function PlayersRosterModule({
     setFormOpen(false);
   };
 
-  const handleDeletePlayer = (playerId: string, playerName: string) => {
-    if (
-      !window.confirm(
-        `¿Eliminar a ${playerName} del padrón? Esta acción lo quitará también de los bombos y equipos.`
-      )
-    ) {
-      return;
-    }
+  const handleDeletePlayer = (playerId: string) => {
     onUpdateDB((prev) => ({
       ...prev,
       players: prev.players.filter((p) => p.id !== playerId),
@@ -749,7 +742,7 @@ export function PlayersRosterModule({
                   size="sm"
                   variant="ghost"
                   className="w-full text-red-300 hover:bg-red-500/15 hover:text-red-200"
-                  onClick={() => handleDeletePlayer(form.id!, form.name)}
+                  onClick={() => handleDeletePlayer(form.id!)}
                 >
                   <Trash2 className="h-4 w-4" />
                   Eliminar jugador del padrón
