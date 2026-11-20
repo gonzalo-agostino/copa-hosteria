@@ -29,11 +29,14 @@ export async function PUT(request: NextRequest) {
       ...body,
       security: existing.security ?? body.security,
     });
-    return NextResponse.json(saved);
+    return NextResponse.json(saved, {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (err) {
     console.error("Error saving tournament DB:", err);
+    const detail = err instanceof Error ? err.message : "Error desconocido";
     return NextResponse.json(
-      { error: "No se pudo guardar la base de datos" },
+      { error: "No se pudo guardar la base de datos", detail },
       { status: 500 }
     );
   }

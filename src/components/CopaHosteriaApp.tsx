@@ -30,24 +30,42 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
   const [activeTab, setActiveTab] = useState<MainTab>("sorteo");
   const [isOrganizer, setIsOrganizer] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const persistDB = useCallback((nextDB: TournamentDB) => {
     setSaveState("saving");
+    setSaveError(null);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       try {
-        await fetch("/api/state", {
+        const res = await fetch("/api/state", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(nextDB),
         });
+        if (!res.ok) {
+          const errBody = (await res.json().catch(() => ({}))) as {
+            error?: string;
+            detail?: string;
+          };
+          const msg = errBody.detail || errBody.error || `Error HTTP ${res.status}`;
+          setSaveState("error");
+          setSaveError(msg);
+          return;
+        }
         setSaveState("saved");
-        setTimeout(() => setSaveState("idle"), 1400);
+        setSaveError(null);
+        setTimeout(() => setSaveState("idle"), 1600);
       } catch (err) {
         console.error("Failed to save DB:", err);
-        setSaveState("idle");
+        setSaveState("error");
+        setSaveError(
+          err instanceof Error ? err.message : "Error de conexión al guardar"
+        );
       }
     }, 150);
   }, []);
@@ -112,6 +130,11 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
                 )}
                 {saveState === "saved" && (
                   <span className="ml-2 text-emerald-300">Guardado ✓</span>
+                )}
+                {saveState === "error" && (
+                  <span className="ml-2 text-red-300 font-bold">
+                    Error al guardar
+                  </span>
                 )}
               </p>
             </div>
@@ -179,6 +202,16 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
 
       {/* Main Content Container */}
       <main className="mx-auto max-w-5xl px-3.5 py-5 sm:px-4 sm:py-7">
+        {saveError && (
+          <div className="mb-4 rounded-2xl border border-red-400/60 bg-red-950/80 p-3.5 text-xs text-red-100 shadow-lg">
+            <p className="font-bold text-red-200">
+              No se pudieron guardar los cambios en el servidor:
+            </p>
+            <p className="mt-1 font-mono text-[11px] text-red-100/90 break-all">
+              {saveError}
+            </p>
+          </div>
+        )}
         {activeTab === "sorteo" && (
           <DrawModule
             db={db}
