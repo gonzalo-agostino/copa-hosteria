@@ -1,0 +1,705 @@
+{
+  "editions": [
+    {
+      "id": "ed-2024",
+      "name": "Copa Hostería 2024",
+      "shortName": "2° Edición (2024)",
+      "year": 2024,
+      "date": "2024",
+      "isActive": false
+    },
+    {
+      "id": "ed-2025",
+      "name": "Copa Hostería 2025",
+      "shortName": "3° Edición (2025)",
+      "year": 2025,
+      "date": "2025",
+      "isActive": false
+    },
+    {
+      "id": "ed-2026",
+      "name": "Copa Hostería - 4° Edición (28.11.2026)",
+      "shortName": "4° Edición (2026)",
+      "year": 2026,
+      "date": "28.11.2026",
+      "isActive": true
+    }
+  ],
+  "players": [
+    {
+      "id": "p-01",
+      "name": "Lucio Aranda",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 3,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-02",
+      "name": "Juan Bianchi",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-03",
+      "name": "Joaquin Binetti",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-04",
+      "name": "Tomi Binetti",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-05",
+      "name": "Tute Bondanza",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-06",
+      "name": "José Campos",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 1,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-07",
+      "name": "Vicente Campos",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 3,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-08",
+      "name": "Iván Casco",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-09",
+      "name": "Nico Castiñeira",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 7,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-10",
+      "name": "Rami Castiñeira",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 1,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-11",
+      "name": "Pola Castro",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-12",
+      "name": "Fran Cava",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-13",
+      "name": "Fran Cordero",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-14",
+      "name": "Lucas Cordon",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 1,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-15",
+      "name": "Kiti Cuevas",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 3,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-16",
+      "name": "Santino Cuevas",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-17",
+      "name": "Marian Diaz Mauro",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 1,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-18",
+      "name": "Pancho Duhour",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 3,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-19",
+      "name": "Lucas Espeleta",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-20",
+      "name": "Laucha Freire",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 1,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-21",
+      "name": "Aquito Giudice",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-22",
+      "name": "Alan Maimo",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 8,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-23",
+      "name": "Chicho Margaride",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-24",
+      "name": "Fede Martin",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 5,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-25",
+      "name": "Juancho Mignone",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 2,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-26",
+      "name": "Franco Ortigosa",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 4,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-27",
+      "name": "Sebas Perez Bianchi",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 4,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-28",
+      "name": "Colo Perez Bianchi",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-29",
+      "name": "Manu Perez Delia",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-30",
+      "name": "Nico Polo",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-31",
+      "name": "Bubi Puricelli",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 4,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-32",
+      "name": "Atu Rodriguez",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-33",
+      "name": "Fede Sacchi",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-34",
+      "name": "Marcos Scorzato",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-35",
+      "name": "Santi Scorzato",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 3,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-36",
+      "name": "Facu Sequeira",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 1,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-37",
+      "name": "Fede Serdeiro",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 3,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-38",
+      "name": "Felipe Spallarosa",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-39",
+      "name": "Mati Tasso",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-40",
+      "name": "Roque Vera",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-41",
+      "name": "Nacho Verdejo",
+      "stars": 2,
+      "goals2024": 0,
+      "goals2025": 1,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-42",
+      "name": "Enzo Virgile",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": true
+    },
+    {
+      "id": "p-43",
+      "name": "Bruno Silva",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 6,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": false
+    },
+    {
+      "id": "p-44",
+      "name": "Fede Carneiro",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 4,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": false
+    },
+    {
+      "id": "p-45",
+      "name": "Berchu Milicich",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 3,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": false
+    },
+    {
+      "id": "p-46",
+      "name": "Gonzalo Agostino",
+      "stars": 1,
+      "goals2024": 0,
+      "goals2025": 1,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": false
+    },
+    {
+      "id": "p-47",
+      "name": "Fermín Urtasun",
+      "stars": 0,
+      "goals2024": 0,
+      "goals2025": 1,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": false
+    },
+    {
+      "id": "p-48",
+      "name": "Nicolás Etcheto",
+      "stars": 0,
+      "goals2024": 7,
+      "goals2025": 0,
+      "assists2025": 0,
+      "yellowCards2025": 0,
+      "redCards2025": 0,
+      "convocadoActual": false
+    }
+  ],
+  "teams": [
+    {
+      "id": "team-1",
+      "editionId": "ed-2026",
+      "name": "Equipo Azul",
+      "color": "#2563EB",
+      "playerIds": []
+    },
+    {
+      "id": "team-2",
+      "editionId": "ed-2026",
+      "name": "Equipo Dorado",
+      "color": "#D49B35",
+      "playerIds": []
+    },
+    {
+      "id": "team-3",
+      "editionId": "ed-2026",
+      "name": "Equipo Rojo",
+      "color": "#DC2626",
+      "playerIds": []
+    },
+    {
+      "id": "team-4",
+      "editionId": "ed-2026",
+      "name": "Equipo Verde",
+      "color": "#16A34A",
+      "playerIds": []
+    },
+    {
+      "id": "team-5",
+      "editionId": "ed-2026",
+      "name": "Equipo Blanco",
+      "color": "#F8FAFC",
+      "playerIds": []
+    },
+    {
+      "id": "team-6",
+      "editionId": "ed-2026",
+      "name": "Equipo Celeste",
+      "color": "#0EA5E9",
+      "playerIds": []
+    }
+  ],
+  "draw": {
+    "teamCount": 6,
+    "pots": [
+      {
+        "id": "pot-1",
+        "number": 1,
+        "name": "Bombo 1",
+        "playerIds": [
+          "p-41",
+          "p-22",
+          "p-09",
+          "p-26",
+          "p-01",
+          "p-18"
+        ]
+      },
+      {
+        "id": "pot-2",
+        "number": 2,
+        "name": "Bombo 2",
+        "playerIds": [
+          "p-35",
+          "p-20",
+          "p-17",
+          "p-42",
+          "p-39",
+          "p-24"
+        ]
+      },
+      {
+        "id": "pot-3",
+        "number": 3,
+        "name": "Bombo 3",
+        "playerIds": [
+          "p-31",
+          "p-27",
+          "p-37",
+          "p-15",
+          "p-07",
+          "p-25"
+        ]
+      },
+      {
+        "id": "pot-4",
+        "number": 4,
+        "name": "Bombo 4",
+        "playerIds": [
+          "p-36",
+          "p-06",
+          "p-14",
+          "p-10",
+          "p-21",
+          "p-32"
+        ]
+      },
+      {
+        "id": "pot-5",
+        "number": 5,
+        "name": "Bombo 5",
+        "playerIds": [
+          "p-23",
+          "p-28",
+          "p-33",
+          "p-38",
+          "p-12",
+          "p-13"
+        ]
+      },
+      {
+        "id": "pot-6",
+        "number": 6,
+        "name": "Bombo 6",
+        "playerIds": [
+          "p-08",
+          "p-03",
+          "p-02",
+          "p-19",
+          "p-29",
+          "p-34"
+        ]
+      },
+      {
+        "id": "pot-7",
+        "number": 7,
+        "name": "Bombo 7",
+        "playerIds": [
+          "p-30",
+          "p-11",
+          "p-40",
+          "p-16",
+          "p-04",
+          "p-05"
+        ]
+      }
+    ],
+    "drawnPlayerIds": [],
+    "currentPotIndex": 0,
+    "potTeamOrders": {},
+    "isComplete": false,
+    "lastDrawn": null
+  },
+  "matches": [],
+  "updatedAt": "2026-11-20T19:41:25.656Z"
+}

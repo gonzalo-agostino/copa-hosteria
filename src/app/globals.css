@@ -1,26 +1,83 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-deep: #0b1c44;
+  --bg-royal: #143275;
+  --bg-navy: #071433;
+  --gold-main: #d49b35;
+  --gold-soft: #f5ce78;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background-color: var(--bg-navy);
+  color: #f8fafc;
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-image:
+    radial-gradient(ellipse 75% 45% at 50% -5%, rgba(212, 155, 53, 0.22), transparent 62%),
+    radial-gradient(ellipse 55% 40% at 85% 25%, rgba(37, 99, 235, 0.16), transparent 65%),
+    radial-gradient(ellipse 55% 40% at 15% 75%, rgba(212, 155, 53, 0.08), transparent 65%),
+    linear-gradient(180deg, #0c1f4d 0%, #122d6b 48%, #071433 100%);
+  background-attachment: fixed;
+  min-height: 100dvh;
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(7, 20, 51, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 155, 53, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 155, 53, 0.6);
+}
+
+@keyframes drumSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes revealBall {
+  0% {
+    opacity: 0;
+    transform: scale(0.45) translateY(18px);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.04) translateY(-3px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-bolillero {
+  animation: drumSpin 0.65s linear infinite;
+}
+
+.animate-ball-pop {
+  animation: revealBall 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
