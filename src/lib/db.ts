@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { TournamentDB } from "@/types/tournament";
-import { createSeedDatabase, SEED_EDITIONS } from "@/lib/seed";
+import { createSeedDatabase, SEED_EDITIONS, SEED_PLAYERS } from "@/lib/seed";
 import {
   getSupabaseAdmin,
   SUPABASE_STATE_ROW_ID,
@@ -11,7 +11,7 @@ import {
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "copa-hosteria-db.json");
 
-function normalizeEditions(db: TournamentDB): TournamentDB {
+function normalizeDB(db: TournamentDB): TournamentDB {
   const hasAllOfficialEditions =
     Array.isArray(db.editions) &&
     db.editions.length === SEED_EDITIONS.length &&
@@ -21,10 +21,41 @@ function normalizeEditions(db: TournamentDB): TournamentDB {
         ed.champion === SEED_EDITIONS[idx].champion
     );
 
-  if (hasAllOfficialEditions) return db;
+  const seedPlayerMap = new Map(SEED_PLAYERS.map((p) => [p.id, p]));
+  const existingIds = new Set(db.players.map((p) => p.id));
+
+  let playersChanged = false;
+  const syncedPlayers = db.players.map((p) => {
+    const seed = seedPlayerMap.get(p.id);
+    if (!seed) return p;
+    if (
+      p.goalsEd1 === seed.goalsEd1 &&
+      p.goalsEd2 === seed.goalsEd2 &&
+      p.goals2024 === seed.goals2024
+    ) {
+      return p;
+    }
+    playersChanged = true;
+    return {
+      ...p,
+      goalsEd1: seed.goalsEd1,
+      goalsEd2: seed.goalsEd2,
+      goals2024: seed.goals2024,
+    };
+  });
+
+  for (const seed of SEED_PLAYERS) {
+    if (!existingIds.has(seed.id)) {
+      syncedPlayers.push(seed);
+      playersChanged = true;
+    }
+  }
+
+  if (hasAllOfficialEditions && !playersChanged) return db;
   return {
     ...db,
     editions: SEED_EDITIONS,
+    players: syncedPlayers,
   };
 }
 
@@ -50,7 +81,7 @@ function readLocalDB(): TournamentDB {
       writeLocalDB(seed);
       return seed;
     }
-    return normalizeEditions(parsed);
+    return normalizeDB(parsed);
   } catch {
     const seed = createSeedDatabase();
     writeLocalDB(seed);
@@ -80,7 +111,7 @@ export async function readDB(): Promise<TournamentDB> {
     if (!error && data?.data) {
       const parsed = data.data as TournamentDB;
       if (Array.isArray(parsed.players) && parsed.players.length > 0) {
-        return normalizeEditions(parsed);
+        return normalizeDB(parsed);
       }
     }
 

@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Trophy, Target, HandHelping, ShieldAlert } from "lucide-react";
 import { TournamentDB } from "@/types/tournament";
+import { SEED_EDITIONS } from "@/lib/seed";
 import {
   calculatePlayerStats,
   calculateStandings,
@@ -79,10 +80,22 @@ export function StatsModule({ db }: StatsModuleProps) {
     [playerStats]
   );
 
+  const officialEditions = useMemo(() => {
+    const hasSyncedEditions =
+      Array.isArray(db.editions) &&
+      db.editions.length === SEED_EDITIONS.length &&
+      db.editions.every(
+        (ed, idx) =>
+          ed.date === SEED_EDITIONS[idx].date &&
+          ed.champion === SEED_EDITIONS[idx].champion
+      );
+    return hasSyncedEditions ? db.editions : SEED_EDITIONS;
+  }, [db.editions]);
+
   return (
     <div className="space-y-4">
       {/* Palmarés / Historial de Ediciones */}
-      {db.editions.length > 0 && (
+      {officialEditions.length > 0 && (
         <Card className="border-[#D49B35]/35 bg-gradient-to-r from-[#102860]/95 via-[#0B1E4C]/95 to-[#091A42]/95">
           <CardHeader className="pb-2.5">
             <CardTitle className="flex items-center justify-between text-sm sm:text-base">
@@ -90,11 +103,11 @@ export function StatsModule({ db }: StatsModuleProps) {
                 <Trophy className="h-4 w-4 text-[#F5CE78]" />
                 Palmarés · Ediciones Copa Hostería
               </span>
-              <Badge variant="gold">{db.editions.length} ediciones</Badge>
+              <Badge variant="gold">{officialEditions.length} ediciones</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-            {db.editions.map((ed) => (
+            {officialEditions.map((ed) => (
               <div
                 key={ed.id}
                 className={`rounded-xl border px-3.5 py-3 transition ${
@@ -116,11 +129,17 @@ export function StatsModule({ db }: StatsModuleProps) {
                 </p>
                 <p
                   className={`mt-1.5 truncate text-xs sm:text-[13px] font-black tracking-tight ${
-                    ed.champion ? "text-white" : "text-[#F5CE78]"
+                    ed.isActive ? "text-[#F5CE78]" : "text-white"
                   }`}
-                  title={ed.champion ?? "Próxima edición"}
+                  title={
+                    ed.isActive
+                      ? "Próxima edición"
+                      : (ed.champion ?? "Edición anterior")
+                  }
                 >
-                  {ed.champion ?? "Próxima edición"}
+                  {ed.isActive
+                    ? "Próxima edición"
+                    : (ed.champion ?? "Edición anterior")}
                 </p>
               </div>
             ))}
@@ -338,7 +357,7 @@ export function StatsModule({ db }: StatsModuleProps) {
                           </span>
                         )}
                       </p>
-                      <div className="flex items-center gap-1.5 text-[11px] text-blue-200/75">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-blue-100/80">
                         {row.teamName ? (
                           <span className="inline-flex items-center gap-1">
                             <span
@@ -348,13 +367,30 @@ export function StatsModule({ db }: StatsModuleProps) {
                             {row.teamName}
                           </span>
                         ) : !row.player.convocadoActual ? (
-                          <span className="text-[#F0C46B]/80">
+                          <span className="text-[#F5CE78]/90">
                             {(row.player.goals2024 ?? 0) > 0 && row.player.goals2025 === 0
                               ? "Histórico 2024"
                               : "Histórico"}
                           </span>
                         ) : (
                           <span>Convocado 2026</span>
+                        )}
+                        {scope === "all" && (
+                          <span className="text-[10px] font-semibold text-blue-200/75">
+                            {[
+                              (row.player.goalsEd1 ?? 0) > 0
+                                ? `Ed.1: ${row.player.goalsEd1}`
+                                : null,
+                              (row.player.goalsEd2 ?? 0) > 0
+                                ? `Ed.2: ${row.player.goalsEd2}`
+                                : null,
+                              row.player.goals2025 > 0
+                                ? `Ed.3: ${row.player.goals2025}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
                         )}
                       </div>
                     </div>

@@ -24,8 +24,10 @@ export interface Player {
   name: string;
   position?: PlayerPosition;
   stars: number; // Champion stars (★)
-  goals2024?: number;
-  goals2025: number;
+  goalsEd1?: number; // 1° Edición (13/01/2024)
+  goalsEd2?: number; // 2° Edición (30/11/2024)
+  goals2024?: number; // Total 2024 (Ed.1 + Ed.2)
+  goals2025: number; // 3° Edición (06/12/2025)
   assists2025: number;
   yellowCards2025: number;
   redCards2025: number;
