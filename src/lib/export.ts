@@ -569,3 +569,288 @@ export async function downloadPlayerCardPng(
   link.href = canvas.toDataURL("image/png");
   link.click();
 }
+
+export async function downloadSingleTeamCardPng(
+  team: Team,
+  players: Player[]
+) {
+  const playerMap = new Map(players.map((p) => [p.id, p]));
+  const teamPlayers = team.playerIds
+    .map((pid) => playerMap.get(pid))
+    .filter((p): p is Player => Boolean(p));
+
+  const [logoImg, ...playerPhotos] = await Promise.all([
+    loadLogoImage("/logo-copa-hosteria.jpg"),
+    ...teamPlayers.map((p) =>
+      p.photoUrl ? loadLogoImage(p.photoUrl) : Promise.resolve(null)
+    ),
+  ]);
+
+  const width = 1080;
+  const rowCount = Math.max(7, teamPlayers.length);
+  const rowH = 104;
+  const rowGap = 16;
+  const listStartY = 420;
+  const height = Math.max(
+    1350,
+    listStartY + rowCount * (rowH + rowGap) + 110
+  );
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  // Deep royal blue background gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+  bgGrad.addColorStop(0, "#071433");
+  bgGrad.addColorStop(0.5, "#0F2557");
+  bgGrad.addColorStop(1, "#16357A");
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Golden radial aura at top
+  const aura = ctx.createRadialGradient(width / 2, 260, 30, width / 2, 260, 480);
+  aura.addColorStop(0, "rgba(212, 155, 53, 0.30)");
+  aura.addColorStop(0.6, "rgba(212, 155, 53, 0.08)");
+  aura.addColorStop(1, "rgba(212, 155, 53, 0)");
+  ctx.fillStyle = aura;
+  ctx.fillRect(0, 0, width, 640);
+
+  // Outer double gold frame
+  ctx.strokeStyle = "#D49B35";
+  ctx.lineWidth = 5;
+  drawRoundedRect(ctx, 28, 28, width - 56, height - 56, 40);
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(240, 196, 107, 0.35)";
+  ctx.lineWidth = 2;
+  drawRoundedRect(ctx, 44, 44, width - 88, height - 88, 30);
+  ctx.stroke();
+
+  // Top Header with official logo
+  if (logoImg) {
+    const logoSize = 96;
+    const logoX = 76;
+    const logoY = 72;
+    ctx.save();
+    drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 18);
+    ctx.clip();
+    ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+    ctx.restore();
+    ctx.strokeStyle = "#D49B35";
+    ctx.lineWidth = 2.5;
+    drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 18);
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "900 40px system-ui, -apple-system, sans-serif";
+    ctx.fillText("COPA HOSTERÍA", logoX + logoSize + 24, 116);
+
+    ctx.fillStyle = "#F0C46B";
+    ctx.font = "700 22px system-ui, -apple-system, sans-serif";
+    ctx.fillText("4° EDICIÓN  ·  28.11.2026", logoX + logoSize + 24, 152);
+  } else {
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "900 44px system-ui, -apple-system, sans-serif";
+    ctx.fillText("COPA HOSTERÍA · 4° EDICIÓN", width / 2, 128);
+  }
+
+  // Top-right badge
+  const pillW = 240;
+  const pillH = 48;
+  const pillX = width - 76 - pillW;
+  const pillY = 96;
+  ctx.fillStyle = "rgba(212, 155, 53, 0.18)";
+  drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 24);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(240, 196, 107, 0.7)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#F0C46B";
+  ctx.font = "800 20px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("PLANTEL OFICIAL", pillX + pillW / 2, pillY + 31);
+
+  // Hero Team Banner
+  const bannerX = 76;
+  const bannerY = 198;
+  const bannerW = width - 152;
+  const bannerH = 188;
+
+  ctx.fillStyle = "rgba(7, 20, 51, 0.88)";
+  drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 28);
+  ctx.fill();
+  ctx.strokeStyle = team.color === "#F8FAFC" ? "#F0C46B" : team.color;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // Team color accent circle
+  ctx.fillStyle = team.color;
+  ctx.beginPath();
+  ctx.arc(bannerX + 74, bannerY + 74, 34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#FFFFFF";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // Team Name
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#F0C46B";
+  ctx.font = "800 18px system-ui, -apple-system, sans-serif";
+  ctx.fillText("EQUIPO CONFIRMADO", bannerX + 132, bannerY + 52);
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = "900 48px system-ui, -apple-system, sans-serif";
+  ctx.fillText(team.name.toUpperCase(), bannerX + 132, bannerY + 102);
+
+  // Squad aggregate stats row inside banner
+  const totalStars = teamPlayers.reduce((sum, p) => sum + p.stars, 0);
+  const totalGoals = teamPlayers.reduce(
+    (sum, p) => sum + (p.goals2024 ?? 0) + p.goals2025,
+    0
+  );
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
+  drawRoundedRect(ctx, bannerX + 24, bannerY + 126, bannerW - 48, 44, 14);
+  ctx.fill();
+
+  ctx.fillStyle = "#E2E8F0";
+  ctx.font = "700 20px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    `${teamPlayers.length} JUGADORES    ·    ★ ${totalStars} TÍTULOS EN PLANTEL    ·    ⚽ ${totalGoals} GOLES HISTÓRICOS`,
+    width / 2,
+    bannerY + 155
+  );
+
+  // Players list rows
+  teamPlayers.forEach((p, idx) => {
+    const photoImg = playerPhotos[idx];
+    const isCaptain = team.captainId === p.id;
+    const rx = 76;
+    const ry = listStartY + idx * (rowH + rowGap);
+    const rw = width - 152;
+
+    ctx.fillStyle = isCaptain
+      ? "rgba(212, 155, 53, 0.16)"
+      : "rgba(10, 27, 66, 0.82)";
+    drawRoundedRect(ctx, rx, ry, rw, rowH, 22);
+    ctx.fill();
+
+    ctx.strokeStyle = isCaptain
+      ? "#F0C46B"
+      : "rgba(212, 155, 53, 0.35)";
+    ctx.lineWidth = isCaptain ? 3 : 2;
+    ctx.stroke();
+
+    // Circular Avatar
+    const avR = 36;
+    const avCx = rx + 58;
+    const avCy = ry + rowH / 2;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avCx, avCy, avR, 0, Math.PI * 2);
+    ctx.clip();
+
+    if (photoImg) {
+      const scale = Math.max(
+        (avR * 2) / photoImg.width,
+        (avR * 2) / photoImg.height
+      );
+      const dw = photoImg.width * scale;
+      const dh = photoImg.height * scale;
+      ctx.drawImage(photoImg, avCx - dw / 2, avCy - dh / 2, dw, dh);
+    } else {
+      ctx.fillStyle = "#16357A";
+      ctx.fillRect(avCx - avR, avCy - avR, avR * 2, avR * 2);
+      ctx.fillStyle = "#F0C46B";
+      ctx.font = "800 24px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(getInitials(p.name), avCx, avCy + 2);
+      ctx.textBaseline = "alphabetic";
+    }
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(avCx, avCy, avR + 2, 0, Math.PI * 2);
+    ctx.strokeStyle = p.stars > 0 ? "#F0C46B" : "rgba(255, 255, 255, 0.3)";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Player Name & Subtitle
+    const textX = rx + 114;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "800 30px system-ui, -apple-system, sans-serif";
+    ctx.fillText(p.name, textX, ry + 48);
+
+    const subBits: string[] = [];
+    if (isCaptain) subBits.push("© CAPITÁN");
+    if (p.position) subBits.push(p.position.toUpperCase());
+    if (p.stars > 0) {
+      subBits.push(
+        p.stars === 1 ? "CAMPEÓN" : `${p.stars}× CAMPEÓN`
+      );
+    }
+    if (subBits.length === 0) subBits.push("CONVOCADO 4° EDICIÓN");
+
+    ctx.fillStyle = isCaptain ? "#F5CE78" : "rgba(219, 234, 254, 0.78)";
+    ctx.font = "700 18px system-ui, -apple-system, sans-serif";
+    ctx.fillText(subBits.join("  ·  "), textX, ry + 78);
+
+    // Right side stats: Past goals & Stars
+    let rightCursor = rx + rw - 28;
+    const pastGoals = (p.goals2024 ?? 0) + p.goals2025;
+
+    if (pastGoals > 0) {
+      const gText = `${pastGoals} GOLES`;
+      const gW = 128;
+      const gH = 42;
+      const gX = rightCursor - gW;
+      const gY = ry + (rowH - gH) / 2;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.10)";
+      drawRoundedRect(ctx, gX, gY, gW, gH, 12);
+      ctx.fill();
+      ctx.fillStyle = "#DBEAFE";
+      ctx.font = "800 19px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(gText, gX + gW / 2, gY + 28);
+      rightCursor = gX - 18;
+    }
+
+    if (p.stars > 0) {
+      ctx.fillStyle = "#F5CE78";
+      ctx.font = "900 32px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("★".repeat(p.stars), rightCursor, ry + 62);
+    }
+  });
+
+  // Footer
+  ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+  ctx.font = "700 20px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "COPA HOSTERÍA  ·  4° EDICIÓN  ·  28.11.2026",
+    width / 2,
+    height - 56
+  );
+
+  // Trigger download
+  const slug = team.name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  const link = document.createElement("a");
+  link.download = `copa-hosteria-equipo-${slug}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}

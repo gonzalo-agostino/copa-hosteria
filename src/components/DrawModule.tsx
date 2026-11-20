@@ -28,6 +28,7 @@ import {
 import {
   buildWhatsAppTeamsText,
   downloadPlayerCardPng,
+  downloadSingleTeamCardPng,
   downloadTeamsPosterPng,
 } from "@/lib/export";
 import { exportTeamsSheetPdf } from "@/lib/exportPdf";
@@ -1187,15 +1188,30 @@ export function DrawModule({
                         />
                         <span className="truncate">{team.name}</span>
                       </span>
-                      <Badge variant="muted">
-                        {team.playerIds.length} /{" "}
-                        {getTeamCapacity(
-                          team,
-                          db.teams.length,
-                          activePlayersCount
-                        )}{" "}
-                        jug.
-                      </Badge>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {team.playerIds.length > 0 && (
+                          <button
+                            type="button"
+                            title={`Descargar tarjeta PNG de ${team.name}`}
+                            onClick={() =>
+                              downloadSingleTeamCardPng(team, db.players)
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg border border-[#D49B35]/45 bg-[#D49B35]/18 px-2 py-1 text-[11px] font-bold text-[#F5CE78] transition active:scale-95 hover:bg-[#D49B35]/30 cursor-pointer"
+                          >
+                            <Download className="h-3 w-3" />
+                            <span>Tarjeta</span>
+                          </button>
+                        )}
+                        <Badge variant="muted">
+                          {team.playerIds.length} /{" "}
+                          {getTeamCapacity(
+                            team,
+                            db.teams.length,
+                            activePlayersCount
+                          )}{" "}
+                          jug.
+                        </Badge>
+                      </div>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-1.5">
