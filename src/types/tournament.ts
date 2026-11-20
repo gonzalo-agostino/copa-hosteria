@@ -62,15 +62,23 @@ export interface MatchEvent {
   createdAt: string;
 }
 
+export type MatchStage = "liga" | "playoff";
+
+export type PlayoffSlot = "sf1" | "sf2" | "third" | "final";
+
 export interface Match {
   id: string;
   editionId: string;
   round: number;
   roundLabel: string;
+  stage?: MatchStage;
+  playoffSlot?: PlayoffSlot;
   homeTeamId: string;
   awayTeamId: string;
   status: MatchStatus;
   events: MatchEvent[];
+  penaltiesHome?: number | null;
+  penaltiesAway?: number | null;
   createdAt: string;
 }
 

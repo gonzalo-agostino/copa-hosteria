@@ -178,6 +178,7 @@ export function calculateStandings(
 
   for (const m of matches) {
     if (m.status === "pendiente") continue;
+    if (m.stage === "playoff") continue;
     const homeRow = map.get(m.homeTeamId);
     const awayRow = map.get(m.awayTeamId);
     if (!homeRow || !awayRow) continue;
@@ -340,4 +341,85 @@ export function generateRoundRobinMatches(teams: Team[]): Match[] {
   }
 
   return matches;
+}
+
+export function getMatchWinnerTeamId(match: Match): string | null {
+  if (match.status !== "finalizado") return null;
+  const { home, away } = getMatchScore(match);
+  if (home > away) return match.homeTeamId;
+  if (away > home) return match.awayTeamId;
+
+  const pHome = match.penaltiesHome ?? null;
+  const pAway = match.penaltiesAway ?? null;
+  if (pHome !== null && pAway !== null && pHome !== pAway) {
+    return pHome > pAway ? match.homeTeamId : match.awayTeamId;
+  }
+  return null;
+}
+
+export function getMatchLoserTeamId(match: Match): string | null {
+  const winner = getMatchWinnerTeamId(match);
+  if (!winner) return null;
+  return winner === match.homeTeamId ? match.awayTeamId : match.homeTeamId;
+}
+
+export function generatePlayoffSemifinals(
+  standings: StandingRow[],
+  startRound = 100
+): Match[] {
+  if (standings.length < 4) return [];
+  const [first, second, third, fourth] = standings;
+  const now = Date.now();
+
+  return [
+    {
+      id: `po-sf1-${now}`,
+      editionId: "ed-2026",
+      round: startRound,
+      roundLabel: "Semifinal 1 (1° vs 4°)",
+      stage: "playoff",
+      playoffSlot: "sf1",
+      homeTeamId: first.teamId,
+      awayTeamId: fourth.teamId,
+      status: "pendiente",
+      events: [],
+      createdAt: new Date(now).toISOString(),
+    },
+    {
+      id: `po-sf2-${now + 1}`,
+      editionId: "ed-2026",
+      round: startRound,
+      roundLabel: "Semifinal 2 (2° vs 3°)",
+      stage: "playoff",
+      playoffSlot: "sf2",
+      homeTeamId: second.teamId,
+      awayTeamId: third.teamId,
+      status: "pendiente",
+      events: [],
+      createdAt: new Date(now + 1000).toISOString(),
+    },
+  ];
+}
+
+export function generatePlayoffDirectFinal(
+  standings: StandingRow[],
+  startRound = 101
+): Match | null {
+  if (standings.length < 2) return null;
+  const [first, second] = standings;
+  const now = Date.now();
+
+  return {
+    id: `po-final-${now}`,
+    editionId: "ed-2026",
+    round: startRound,
+    roundLabel: "Gran Final",
+    stage: "playoff",
+    playoffSlot: "final",
+    homeTeamId: first.teamId,
+    awayTeamId: second.teamId,
+    status: "pendiente",
+    events: [],
+    createdAt: new Date(now).toISOString(),
+  };
 }
