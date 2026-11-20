@@ -313,6 +313,13 @@ export function LiveMatchModule({
     }));
   };
 
+  const handleClearLeagueMatches = () => {
+    onUpdateDB((prev) => ({
+      ...prev,
+      matches: prev.matches.filter((m) => m.stage === "playoff"),
+    }));
+  };
+
   const handleAdjustPenalties = (
     matchId: string,
     side: "home" | "away",
@@ -1385,6 +1392,20 @@ export function LiveMatchModule({
           </div>
         ))
       )}
+
+          {isOrganizer && matchesByRound.length > 0 && (
+            <div className="flex justify-end pt-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-red-300 hover:bg-red-500/15 hover:text-red-200"
+                onClick={handleClearLeagueMatches}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Reiniciar Fase Liga
+              </Button>
+            </div>
+          )}
         </>
       )}
 
