@@ -16,6 +16,8 @@ import {
   GripVertical,
   FileDown,
   Undo2,
+  Plus,
+  Minus,
 } from "lucide-react";
 import { Player, Team, TournamentDB } from "@/types/tournament";
 import {
@@ -59,6 +61,43 @@ function shuffleArray<T>(arr: T[]): T[] {
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
+}
+
+function getTeamCapacity(
+  team: Team,
+  teamCount: number,
+  activePlayersCount: number
+): number {
+  if (typeof team.maxPlayers === "number" && team.maxPlayers >= 1) {
+    return team.maxPlayers;
+  }
+  return Math.max(1, Math.ceil(activePlayersCount / Math.max(1, teamCount)));
+}
+
+function pickTargetTeamIndex(
+  teams: Team[],
+  potOrder: number[],
+  offset: number,
+  activePlayersCount: number
+): number {
+  const n = teams.length;
+  // First pass: follow shuffled pot order, skipping teams already at capacity
+  for (let step = 0; step < n; step++) {
+    const idx = potOrder[(offset + step) % n];
+    const team = teams[idx];
+    const cap = getTeamCapacity(team, n, activePlayersCount);
+    if (team.playerIds.length < cap) {
+      return idx;
+    }
+  }
+  // Fallback if all teams reached configured capacity: pick team with fewest players
+  let bestIdx = 0;
+  for (let i = 1; i < n; i++) {
+    if (teams[i].playerIds.length < teams[bestIdx].playerIds.length) {
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
 }
 
 export function DrawModule({
@@ -140,7 +179,7 @@ export function DrawModule({
 
   const handleUpdateTeam = (
     teamId: string,
-    patch: Partial<Pick<Team, "name" | "color">>
+    patch: Partial<Pick<Team, "name" | "color" | "maxPlayers">>
   ) => {
     onUpdateDB((prev) => ({
       ...prev,
@@ -302,8 +341,15 @@ export function DrawModule({
 
       const alreadyDrawnFromThisPot =
         pot.playerIds.length - undrawnInPot.length;
-      const targetTeamIdx =
-        potOrders[potIdx][alreadyDrawnFromThisPot % prev.teams.length];
+      const allActiveIds = prev.players
+        .filter((p) => p.convocadoActual)
+        .map((p) => p.id);
+      const targetTeamIdx = pickTargetTeamIndex(
+        prev.teams,
+        potOrders[potIdx],
+        alreadyDrawnFromThisPot,
+        allActiveIds.length
+      );
       const targetTeam = prev.teams[targetTeamIdx];
 
       const nextDrawn = [...prev.draw.drawnPlayerIds, pickedPlayerId];
@@ -313,9 +359,6 @@ export function DrawModule({
           : t
       );
 
-      const allActiveIds = prev.players
-        .filter((p) => p.convocadoActual)
-        .map((p) => p.id);
       const isComplete = nextDrawn.length >= allActiveIds.length;
 
       return {
@@ -371,9 +414,14 @@ export function DrawModule({
         }
 
         const alreadyDrawnCount = pot.playerIds.length - undrawnInPot.length;
+        const activeCount = prev.players.filter((p) => p.convocadoActual).length;
         undrawnInPot.forEach((pid, k) => {
-          const teamIdx =
-            potOrders[potIdx][(alreadyDrawnCount + k) % nextTeams.length];
+          const teamIdx = pickTargetTeamIndex(
+            nextTeams,
+            potOrders[potIdx],
+            alreadyDrawnCount + k,
+            activeCount
+          );
           nextTeams[teamIdx].playerIds.push(pid);
           nextDrawn.push(pid);
           drawnSet.add(pid);
@@ -509,14 +557,22 @@ export function DrawModule({
       )}
 
       {/* STEP: EQUIPOS & CONFIG (Organizer only) */}
-      {isOrganizer && step === "equipos" && (
+      {isOrganizer && step === "equipos" && (() => {
+        const totalCapacity = db.teams.reduce(
+          (sum, t) => sum + getTeamCapacity(t, db.teams.length, activePlayersCount),
+          0
+        );
+        return (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+            <CardTitle className="flex flex-wrap items-center justify-between gap-2">
               <span>Configuración de Equipos</span>
-              <Badge variant="gold">
-                {activePlayersCount} convocados · ~
-                {Math.round(activePlayersCount / db.teams.length)} por equipo
+              <Badge
+                variant={
+                  totalCapacity === activePlayersCount ? "gold" : "warning"
+                }
+              >
+                Cupo total: {totalCapacity} / {activePlayersCount} convocados
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -542,12 +598,18 @@ export function DrawModule({
                 ))}
               </div>
               <p className="mt-1.5 text-xs text-blue-200/65">
-                Por defecto: 6 equipos de 7 jugadores para los 42 convocados. Cambiar la cantidad reinicia el sorteo.
+                Podés ajustar el cupo individual de cada equipo abajo (por ejemplo, si un equipo lleva 8 jugadores y otro 7).
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              {db.teams.map((team, idx) => (
+              {db.teams.map((team, idx) => {
+                const cap = getTeamCapacity(
+                  team,
+                  db.teams.length,
+                  activePlayersCount
+                );
+                return (
                 <div
                   key={team.id}
                   className="rounded-2xl border border-white/12 bg-[#10295E]/70 p-3.5 space-y-2.5"
@@ -565,6 +627,38 @@ export function DrawModule({
                       placeholder={`Equipo ${idx + 1}`}
                       className="h-10 text-sm font-bold"
                     />
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-white/10 bg-[#0A1B42]/70 px-3 py-1.5">
+                    <span className="text-xs font-semibold text-blue-200/80">
+                      Jugadores en este equipo
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateTeam(team.id, {
+                            maxPlayers: Math.max(1, cap - 1),
+                          })
+                        }
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 cursor-pointer"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="w-6 text-center text-sm font-black tabular-nums text-[#F5CE78]">
+                        {cap}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleUpdateTeam(team.id, {
+                            maxPlayers: Math.min(20, cap + 1),
+                          })
+                        }
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#D49B35] text-[#071433] hover:bg-[#E5B049] cursor-pointer"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {TEAM_COLOR_PRESETS.map((preset) => (
@@ -585,11 +679,13 @@ export function DrawModule({
                     ))}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
-      )}
+        );
+      })()}
 
       {/* STEP: BOMBOS (Organizer only) */}
       {isOrganizer && step === "bombos" && (
@@ -1014,7 +1110,13 @@ export function DrawModule({
                         <span className="truncate">{team.name}</span>
                       </span>
                       <Badge variant="muted">
-                        {team.playerIds.length} jug.
+                        {team.playerIds.length} /{" "}
+                        {getTeamCapacity(
+                          team,
+                          db.teams.length,
+                          activePlayersCount
+                        )}{" "}
+                        jug.
                       </Badge>
                     </CardTitle>
                   </CardHeader>
