@@ -24,7 +24,11 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
-    const saved = await writeDB(body);
+    const existing = await readDB();
+    const saved = await writeDB({
+      ...body,
+      security: existing.security ?? body.security,
+    });
     return NextResponse.json(saved);
   } catch (err) {
     console.error("Error saving tournament DB:", err);

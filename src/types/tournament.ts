@@ -89,12 +89,23 @@ export interface DrawState {
   } | null;
 }
 
+export interface FailedAttemptRecord {
+  count: number;
+  blocked: boolean;
+  lastAttemptAt: string;
+}
+
+export interface SecurityState {
+  failedAttemptsByIp: Record<string, FailedAttemptRecord>;
+}
+
 export interface TournamentDB {
   editions: Edition[];
   players: Player[];
   teams: Team[];
   draw: DrawState;
   matches: Match[];
+  security?: SecurityState;
   updatedAt: string;
 }
 
