@@ -1,10 +1,32 @@
 import fs from "fs";
 import path from "path";
 import { TournamentDB } from "@/types/tournament";
-import { createSeedDatabase } from "@/lib/seed";
+import { createSeedDatabase, SEED_EDITIONS } from "@/lib/seed";
+import {
+  getSupabaseAdmin,
+  SUPABASE_STATE_ROW_ID,
+  SUPABASE_STATE_TABLE,
+} from "@/lib/supabase";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "copa-hosteria-db.json");
+
+function normalizeEditions(db: TournamentDB): TournamentDB {
+  const hasAllOfficialEditions =
+    Array.isArray(db.editions) &&
+    db.editions.length === SEED_EDITIONS.length &&
+    db.editions.every(
+      (ed, idx) =>
+        ed.date === SEED_EDITIONS[idx].date &&
+        ed.champion === SEED_EDITIONS[idx].champion
+    );
+
+  if (hasAllOfficialEditions) return db;
+  return {
+    ...db,
+    editions: SEED_EDITIONS,
+  };
+}
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -12,7 +34,7 @@ function ensureDataDir() {
   }
 }
 
-export function readDB(): TournamentDB {
+function readLocalDB(): TournamentDB {
   ensureDataDir();
   if (!fs.existsSync(DB_PATH)) {
     const seed = createSeedDatabase();
@@ -25,18 +47,18 @@ export function readDB(): TournamentDB {
     const parsed = JSON.parse(raw) as TournamentDB;
     if (!parsed || !Array.isArray(parsed.players) || parsed.players.length === 0) {
       const seed = createSeedDatabase();
-      writeDB(seed);
+      writeLocalDB(seed);
       return seed;
     }
-    return parsed;
+    return normalizeEditions(parsed);
   } catch {
     const seed = createSeedDatabase();
-    writeDB(seed);
+    writeLocalDB(seed);
     return seed;
   }
 }
 
-export function writeDB(db: TournamentDB): TournamentDB {
+function writeLocalDB(db: TournamentDB): TournamentDB {
   ensureDataDir();
   const updated: TournamentDB = {
     ...db,
@@ -46,7 +68,58 @@ export function writeDB(db: TournamentDB): TournamentDB {
   return updated;
 }
 
-export function resetDB(): TournamentDB {
+export async function readDB(): Promise<TournamentDB> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from(SUPABASE_STATE_TABLE)
+      .select("data")
+      .eq("id", SUPABASE_STATE_ROW_ID)
+      .maybeSingle();
+
+    if (!error && data?.data) {
+      const parsed = data.data as TournamentDB;
+      if (Array.isArray(parsed.players) && parsed.players.length > 0) {
+        return normalizeEditions(parsed);
+      }
+    }
+
+    // Auto-seed Supabase on first run
+    const seed = createSeedDatabase();
+    await supabase.from(SUPABASE_STATE_TABLE).upsert({
+      id: SUPABASE_STATE_ROW_ID,
+      data: seed,
+      updated_at: seed.updatedAt,
+    });
+    return seed;
+  }
+
+  return readLocalDB();
+}
+
+export async function writeDB(db: TournamentDB): Promise<TournamentDB> {
+  const updated: TournamentDB = {
+    ...db,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from(SUPABASE_STATE_TABLE).upsert({
+      id: SUPABASE_STATE_ROW_ID,
+      data: updated,
+      updated_at: updated.updatedAt,
+    });
+    if (error) {
+      throw new Error(`Supabase write error: ${error.message}`);
+    }
+    return updated;
+  }
+
+  return writeLocalDB(updated);
+}
+
+export async function resetDB(): Promise<TournamentDB> {
   const seed = createSeedDatabase();
   return writeDB(seed);
 }

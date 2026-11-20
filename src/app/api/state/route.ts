@@ -4,7 +4,7 @@ import { TournamentDB } from "@/types/tournament";
 
 export async function GET() {
   try {
-    const db = readDB();
+    const db = await readDB();
     return NextResponse.json(db);
   } catch (err) {
     console.error("Error reading tournament DB:", err);
@@ -24,7 +24,7 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
-    const saved = writeDB(body);
+    const saved = await writeDB(body);
     return NextResponse.json(saved);
   } catch (err) {
     console.error("Error saving tournament DB:", err);
@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE() {
   try {
-    const fresh = resetDB();
+    const fresh = await resetDB();
     return NextResponse.json(fresh);
   } catch (err) {
     console.error("Error resetting tournament DB:", err);

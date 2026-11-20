@@ -2,6 +2,10 @@ import fs from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { readDB, writeDB } from "@/lib/db";
+import {
+  getSupabaseAdmin,
+  SUPABASE_PHOTOS_BUCKET,
+} from "@/lib/supabase";
 
 const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads", "players");
 const ALLOWED_MIME: Record<string, string> = {
@@ -17,7 +21,7 @@ function ensureUploadsDir() {
   }
 }
 
-function removeOldPhotoIfLocal(photoUrl?: string | null) {
+function removeOldLocalPhoto(photoUrl?: string | null) {
   if (!photoUrl || !photoUrl.startsWith("/uploads/players/")) return;
   const filename = path.basename(photoUrl);
   const fullPath = path.join(UPLOADS_DIR, filename);
@@ -25,9 +29,17 @@ function removeOldPhotoIfLocal(photoUrl?: string | null) {
     try {
       fs.unlinkSync(fullPath);
     } catch {
-      // ignore cleanup failure
+      // ignore
     }
   }
+}
+
+function extractSupabaseStoragePath(photoUrl?: string | null): string | null {
+  if (!photoUrl) return null;
+  const marker = `/storage/v1/object/public/${SUPABASE_PHOTOS_BUCKET}/`;
+  const idx = photoUrl.indexOf(marker);
+  if (idx === -1) return null;
+  return photoUrl.slice(idx + marker.length);
 }
 
 export async function POST(
@@ -36,7 +48,7 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
-    const db = readDB();
+    const db = await readDB();
     const player = db.players.find((p) => p.id === id);
     if (!player) {
       return NextResponse.json(
@@ -62,16 +74,43 @@ export async function POST(
       );
     }
 
-    ensureUploadsDir();
-    removeOldPhotoIfLocal(player.photoUrl);
-
     const safeId = id.replace(/[^a-zA-Z0-9_-]/g, "");
     const filename = `${safeId}-${Date.now()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
-    fs.writeFileSync(path.join(UPLOADS_DIR, filename), buffer);
 
-    const photoUrl = `/uploads/players/${filename}`;
-    const updatedDB = writeDB({
+    let photoUrl: string;
+    const supabase = getSupabaseAdmin();
+
+    if (supabase) {
+      // Clean up previous Supabase photo if any
+      const oldPath = extractSupabaseStoragePath(player.photoUrl);
+      if (oldPath) {
+        await supabase.storage.from(SUPABASE_PHOTOS_BUCKET).remove([oldPath]);
+      }
+
+      const { error: uploadErr } = await supabase.storage
+        .from(SUPABASE_PHOTOS_BUCKET)
+        .upload(filename, buffer, {
+          contentType: file.type || "image/jpeg",
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        throw new Error(`Supabase Storage error: ${uploadErr.message}`);
+      }
+
+      const { data: pubData } = supabase.storage
+        .from(SUPABASE_PHOTOS_BUCKET)
+        .getPublicUrl(filename);
+      photoUrl = pubData.publicUrl;
+    } else {
+      ensureUploadsDir();
+      removeOldLocalPhoto(player.photoUrl);
+      fs.writeFileSync(path.join(UPLOADS_DIR, filename), buffer);
+      photoUrl = `/uploads/players/${filename}`;
+    }
+
+    const updatedDB = await writeDB({
       ...db,
       players: db.players.map((p) =>
         p.id === id ? { ...p, photoUrl } : p
@@ -94,7 +133,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    const db = readDB();
+    const db = await readDB();
     const player = db.players.find((p) => p.id === id);
     if (!player) {
       return NextResponse.json(
@@ -103,8 +142,17 @@ export async function DELETE(
       );
     }
 
-    removeOldPhotoIfLocal(player.photoUrl);
-    const updatedDB = writeDB({
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const oldPath = extractSupabaseStoragePath(player.photoUrl);
+      if (oldPath) {
+        await supabase.storage.from(SUPABASE_PHOTOS_BUCKET).remove([oldPath]);
+      }
+    } else {
+      removeOldLocalPhoto(player.photoUrl);
+    }
+
+    const updatedDB = await writeDB({
       ...db,
       players: db.players.map((p) =>
         p.id === id ? { ...p, photoUrl: null } : p

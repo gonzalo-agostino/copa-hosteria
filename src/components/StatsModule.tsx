@@ -81,6 +81,53 @@ export function StatsModule({ db }: StatsModuleProps) {
 
   return (
     <div className="space-y-4">
+      {/* Palmarés / Historial de Ediciones */}
+      {db.editions.length > 0 && (
+        <Card className="border-[#D49B35]/35 bg-gradient-to-r from-[#102860]/95 via-[#0B1E4C]/95 to-[#091A42]/95">
+          <CardHeader className="pb-2.5">
+            <CardTitle className="flex items-center justify-between text-sm sm:text-base">
+              <span className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-[#F5CE78]" />
+                Palmarés · Ediciones Copa Hostería
+              </span>
+              <Badge variant="gold">{db.editions.length} ediciones</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            {db.editions.map((ed) => (
+              <div
+                key={ed.id}
+                className={`rounded-xl border px-3.5 py-3 transition ${
+                  ed.isActive
+                    ? "border-[#F5CE78]/65 bg-[#D49B35]/15 shadow-sm shadow-[#D49B35]/15"
+                    : "border-white/12 bg-[#143275]/45"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#F5CE78]">
+                    {ed.shortName}
+                  </span>
+                  <span className="text-xs" aria-hidden="true">
+                    {ed.isActive ? "🔜" : "🏆"}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs font-semibold tabular-nums text-blue-100/80">
+                  {ed.date}
+                </p>
+                <p
+                  className={`mt-1.5 truncate text-xs sm:text-[13px] font-black tracking-tight ${
+                    ed.champion ? "text-white" : "text-[#F5CE78]"
+                  }`}
+                  title={ed.champion ?? "Próxima edición"}
+                >
+                  {ed.champion ?? "Próxima edición"}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stat Category Tabs */}
       <div className="grid grid-cols-4 gap-1.5 rounded-2xl border border-white/14 bg-[#071433]/85 p-1.5 shadow-inner shadow-black/20">
         {(

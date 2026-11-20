@@ -106,7 +106,7 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
                 )}
               </div>
               <p className="truncate text-xs sm:text-[13px] font-semibold text-[#F5CE78]">
-                4° Edición · 28.11.2026
+                4° Edición · 28/11/2026
                 {saveState === "saving" && (
                   <span className="ml-2 text-blue-100/75">Guardando...</span>
                 )}
@@ -202,6 +202,7 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
           <PlayersRosterModule
             db={db}
             isOrganizer={isOrganizer}
+            onUpdateDB={handleUpdateDB}
             onReplaceDB={setDb}
             onRequestOrganizer={() => setPinModalOpen(true)}
           />

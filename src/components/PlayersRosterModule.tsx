@@ -1,20 +1,56 @@
 "use client";
 
 import React, { useMemo, useRef, useState } from "react";
-import { Camera, Search, Star, Trash2, Users, Lock, Loader2 } from "lucide-react";
-import { TournamentDB } from "@/types/tournament";
+import {
+  Camera,
+  Search,
+  Star,
+  Trash2,
+  Users,
+  Lock,
+  Loader2,
+  Pencil,
+  UserPlus,
+} from "lucide-react";
+import { Player, PlayerPosition, TournamentDB } from "@/types/tournament";
 import { formatStars } from "@/lib/utils";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+const POSITION_OPTIONS: { value: PlayerPosition; label: string }[] = [
+  { value: "", label: "Sin posición definida" },
+  { value: "Arquero", label: "Arquero" },
+  { value: "Defensor", label: "Defensor" },
+  { value: "Mediocampista", label: "Mediocampista" },
+  { value: "Delantero", label: "Delantero" },
+];
 
 interface PlayersRosterModuleProps {
   db: TournamentDB;
   isOrganizer: boolean;
+  onUpdateDB: (updater: (prev: TournamentDB) => TournamentDB) => void;
   onReplaceDB: (nextDB: TournamentDB) => void;
   onRequestOrganizer: () => void;
+}
+
+interface PlayerFormState {
+  id: string | null; // null = creating new player
+  name: string;
+  position: PlayerPosition;
+  stars: number;
+  goals2024: number;
+  goals2025: number;
+  convocadoActual: boolean;
 }
 
 async function compressImageToJpeg(file: File, maxSize = 420): Promise<Blob> {
@@ -56,15 +92,27 @@ async function compressImageToJpeg(file: File, maxSize = 420): Promise<Blob> {
 export function PlayersRosterModule({
   db,
   isOrganizer,
+  onUpdateDB,
   onReplaceDB,
   onRequestOrganizer,
 }: PlayersRosterModuleProps) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"convocados" | "campeones" | "historicos">(
-    "convocados"
-  );
+  const [filter, setFilter] = useState<
+    "convocados" | "campeones" | "historicos"
+  >("convocados");
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [form, setForm] = useState<PlayerFormState>({
+    id: null,
+    name: "",
+    position: "",
+    stars: 0,
+    goals2024: 0,
+    goals2025: 0,
+    convocadoActual: true,
+  });
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const targetPlayerIdRef = useRef<string | null>(null);
 
@@ -85,7 +133,11 @@ export function PlayersRosterModule({
         if (filter === "convocados" && !p.convocadoActual) return false;
         if (filter === "campeones" && p.stars === 0) return false;
         if (filter === "historicos" && p.convocadoActual) return false;
-        if (q && !p.name.toLowerCase().includes(q)) return false;
+        if (q) {
+          const matchesName = p.name.toLowerCase().includes(q);
+          const matchesPos = (p.position ?? "").toLowerCase().includes(q);
+          if (!matchesName && !matchesPos) return false;
+        }
         return true;
       })
       .sort((a, b) => {
@@ -104,6 +156,162 @@ export function PlayersRosterModule({
   const campeonesCount = db.players.filter((p) => p.stars > 0).length;
   const historicosCount = db.players.filter((p) => !p.convocadoActual).length;
   const photosLoadedCount = db.players.filter((p) => Boolean(p.photoUrl)).length;
+
+  const openCreateModal = () => {
+    setForm({
+      id: null,
+      name: "",
+      position: "",
+      stars: 0,
+      goals2024: 0,
+      goals2025: 0,
+      convocadoActual: true,
+    });
+    setFormOpen(true);
+  };
+
+  const openEditModal = (p: Player) => {
+    setForm({
+      id: p.id,
+      name: p.name,
+      position: p.position ?? "",
+      stars: p.stars,
+      goals2024: p.goals2024 ?? 0,
+      goals2025: p.goals2025,
+      convocadoActual: p.convocadoActual,
+    });
+    setFormOpen(true);
+  };
+
+  const handleSavePlayer = () => {
+    const trimmedName = form.name.trim();
+    if (!trimmedName) return;
+
+    onUpdateDB((prev) => {
+      if (form.id) {
+        const prevPlayer = prev.players.find((p) => p.id === form.id);
+        const nextPlayers = prev.players.map((p) =>
+          p.id === form.id
+            ? {
+                ...p,
+                name: trimmedName,
+                position: form.position,
+                stars: Math.max(0, Math.min(10, Number(form.stars) || 0)),
+                goals2024: Math.max(0, Number(form.goals2024) || 0),
+                goals2025: Math.max(0, Number(form.goals2025) || 0),
+                convocadoActual: form.convocadoActual,
+              }
+            : p
+        );
+
+        // Keep draw pots in sync if convocadoActual toggled
+        let nextPots = prev.draw.pots;
+        let nextTeams = prev.teams;
+        let nextDrawnIds = prev.draw.drawnPlayerIds;
+
+        if (prevPlayer && prevPlayer.convocadoActual !== form.convocadoActual) {
+          if (form.convocadoActual) {
+            const alreadyInPot = nextPots.some((pot) =>
+              pot.playerIds.includes(form.id!)
+            );
+            if (!alreadyInPot && nextPots.length > 0) {
+              nextPots = nextPots.map((pot, idx) =>
+                idx === nextPots.length - 1
+                  ? { ...pot, playerIds: [...pot.playerIds, form.id!] }
+                  : pot
+              );
+            }
+          } else {
+            nextPots = nextPots.map((pot) => ({
+              ...pot,
+              playerIds: pot.playerIds.filter((pid) => pid !== form.id),
+            }));
+            nextTeams = nextTeams.map((t) => ({
+              ...t,
+              playerIds: t.playerIds.filter((pid) => pid !== form.id),
+            }));
+            nextDrawnIds = nextDrawnIds.filter((pid) => pid !== form.id);
+          }
+        }
+
+        return {
+          ...prev,
+          players: nextPlayers,
+          teams: nextTeams,
+          draw: {
+            ...prev.draw,
+            pots: nextPots,
+            drawnPlayerIds: nextDrawnIds,
+          },
+        };
+      } else {
+        // Create new player
+        const newId = `p-${crypto.randomUUID().slice(0, 8)}`;
+        const newPlayer: Player = {
+          id: newId,
+          name: trimmedName,
+          position: form.position,
+          stars: Math.max(0, Math.min(10, Number(form.stars) || 0)),
+          goals2024: Math.max(0, Number(form.goals2024) || 0),
+          goals2025: Math.max(0, Number(form.goals2025) || 0),
+          assists2025: 0,
+          yellowCards2025: 0,
+          redCards2025: 0,
+          convocadoActual: form.convocadoActual,
+          photoUrl: null,
+        };
+
+        let nextPots = prev.draw.pots;
+        if (form.convocadoActual && nextPots.length > 0) {
+          nextPots = nextPots.map((pot, idx) =>
+            idx === nextPots.length - 1
+              ? { ...pot, playerIds: [...pot.playerIds, newId] }
+              : pot
+          );
+        }
+
+        return {
+          ...prev,
+          players: [...prev.players, newPlayer],
+          draw: {
+            ...prev.draw,
+            pots: nextPots,
+          },
+        };
+      }
+    });
+
+    setFormOpen(false);
+  };
+
+  const handleDeletePlayer = (playerId: string, playerName: string) => {
+    if (
+      !window.confirm(
+        `¿Eliminar a ${playerName} del padrón? Esta acción lo quitará también de los bombos y equipos.`
+      )
+    ) {
+      return;
+    }
+    onUpdateDB((prev) => ({
+      ...prev,
+      players: prev.players.filter((p) => p.id !== playerId),
+      teams: prev.teams.map((t) => ({
+        ...t,
+        playerIds: t.playerIds.filter((pid) => pid !== playerId),
+      })),
+      draw: {
+        ...prev.draw,
+        pots: prev.draw.pots.map((pot) => ({
+          ...pot,
+          playerIds: pot.playerIds.filter((pid) => pid !== playerId),
+        })),
+        drawnPlayerIds: prev.draw.drawnPlayerIds.filter(
+          (pid) => pid !== playerId
+        ),
+      },
+    }));
+    setFormOpen(false);
+  };
 
   const triggerPhotoPicker = (playerId: string) => {
     targetPlayerIdRef.current = playerId;
@@ -178,40 +386,51 @@ export function PlayersRosterModule({
         onChange={handleFileChange}
       />
 
-      {/* Photos banner */}
-      <Card className="border-[#D49B35]/30">
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+      {/* Roster / Organizer Action Banner */}
+      <Card className="border-[#D49B35]/35">
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm sm:text-base font-extrabold text-white">
-              Fotos del Padrón · {photosLoadedCount} / {db.players.length}
+            <p className="text-sm font-bold text-white">
+              Padrón de Jugadores · {photosLoadedCount} / {db.players.length}{" "}
+              con foto
             </p>
-            <p className="mt-0.5 text-xs sm:text-sm text-blue-100/80">
+            <p className="text-xs text-blue-100/75">
               {isOrganizer
-                ? "Tocá el ícono de cámara en cualquier jugador para cargar o cambiar su foto."
-                : "Desbloqueá el Modo Organizador para cargar o editar fotos de los jugadores."}
+                ? "Podés editar nombre, posición, estrellas, goles, foto o agregar jugadores nuevos."
+                : "Desbloqueá el Modo Organizador para editar jugadores o cargar fotos."}
             </p>
           </div>
-          {!isOrganizer && (
-            <Button size="sm" variant="outline" onClick={onRequestOrganizer}>
+          {isOrganizer ? (
+            <Button size="sm" onClick={openCreateModal} className="shrink-0">
+              <UserPlus className="h-4 w-4" />
+              + Nuevo Jugador
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onRequestOrganizer}
+              className="shrink-0"
+            >
               <Lock className="h-3.5 w-3.5" />
-              Cargar fotos
+              Editar padrón
             </Button>
           )}
         </CardContent>
       </Card>
 
       {uploadError && (
-        <div className="rounded-xl border border-red-400/50 bg-red-950/60 px-3.5 py-2.5 text-xs font-semibold text-red-100">
+        <div className="rounded-xl border border-red-400/50 bg-red-950/60 px-3.5 py-2.5 text-xs font-semibold text-red-200">
           {uploadError}
         </div>
       )}
 
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200/70" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200/55" />
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar jugador por nombre..."
+          placeholder="Buscar por nombre o posición..."
           className="pl-10"
         />
       </div>
@@ -263,7 +482,7 @@ export function PlayersRosterModule({
               key={p.id}
               className="transition hover:border-[#D49B35]/40 hover:bg-[#0C2152]/85"
             >
-              <CardContent className="flex items-center justify-between gap-2.5 p-3.5 sm:p-4">
+              <CardContent className="flex items-center justify-between gap-2.5 p-3.5">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     type="button"
@@ -300,9 +519,17 @@ export function PlayersRosterModule({
                         </span>
                       )}
                     </p>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-blue-100/80">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-blue-100/80">
+                      {p.position && (
+                        <Badge
+                          variant="blue"
+                          className="px-1.5 py-0 text-[10px]"
+                        >
+                          {p.position}
+                        </Badge>
+                      )}
                       {team ? (
-                        <span className="inline-flex items-center gap-1.5 font-medium text-white/90">
+                        <span className="inline-flex items-center gap-1 font-medium text-white/90">
                           <span
                             className="h-2.5 w-2.5 rounded-full border border-white/80"
                             style={{ backgroundColor: team.color }}
@@ -310,21 +537,27 @@ export function PlayersRosterModule({
                           {team.name}
                         </span>
                       ) : p.convocadoActual ? (
-                        <span>Convocado 4° Edición</span>
+                        <span>Convocado 2026</span>
                       ) : (
                         <span className="text-[#F5CE78]/90">
                           {(p.goals2024 ?? 0) > 0 && p.goals2025 === 0
-                            ? "Padrón Histórico 2024"
-                            : "Padrón Histórico 2025"}
+                            ? "Histórico 2024"
+                            : "Histórico 2025"}
                         </span>
                       )}
                       {(p.goals2024 ?? 0) > 0 && (
-                        <Badge variant="gold" className="px-1.5 py-0 text-[10px]">
+                        <Badge
+                          variant="gold"
+                          className="px-1.5 py-0 text-[10px]"
+                        >
                           {p.goals2024}G · 2024
                         </Badge>
                       )}
                       {p.goals2025 > 0 && (
-                        <Badge variant="gold" className="px-1.5 py-0 text-[10px]">
+                        <Badge
+                          variant="gold"
+                          className="px-1.5 py-0 text-[10px]"
+                        >
                           {p.goals2025}G · 2025
                         </Badge>
                       )}
@@ -337,9 +570,18 @@ export function PlayersRosterModule({
                     <button
                       type="button"
                       disabled={isBusy}
+                      onClick={() => openEditModal(p)}
+                      title="Editar datos del jugador"
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-white transition active:scale-95 hover:border-[#D49B35]/60 hover:bg-[#D49B35]/20 hover:text-[#F5CE78]"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
                       onClick={() => triggerPhotoPicker(p.id)}
                       title={p.photoUrl ? "Cambiar foto" : "Subir foto"}
-                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#D49B35]/40 bg-[#D49B35]/15 text-[#F0C46B] transition active:scale-95 hover:bg-[#D49B35]/25 disabled:opacity-45"
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#D49B35]/40 bg-[#D49B35]/15 text-[#F5CE78] transition active:scale-95 hover:bg-[#D49B35]/25 disabled:opacity-45"
                     >
                       <Camera className="h-4 w-4" />
                     </button>
@@ -361,6 +603,145 @@ export function PlayersRosterModule({
           );
         })}
       </div>
+
+      {/* Create / Edit Player Modal */}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {form.id ? (
+                <Pencil className="h-5 w-5 text-[#D49B35]" />
+              ) : (
+                <UserPlus className="h-5 w-5 text-[#D49B35]" />
+              )}
+              {form.id ? "Editar Jugador" : "Nuevo Jugador"}
+            </DialogTitle>
+            <DialogDescription>
+              Modificá nombre, posición, estrellas de campeón, goles históricos o convocatoria.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-blue-100">
+                Nombre y apellido
+              </label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Ej: Nico Castiñeira"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-blue-100">
+                Posición
+              </label>
+              <select
+                value={form.position}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    position: e.target.value as PlayerPosition,
+                  })
+                }
+                className="h-11 w-full rounded-xl border border-white/15 bg-[#0A1B42] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#D49B35]"
+              >
+                {POSITION_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-blue-100">
+                  Estrellas ★
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={10}
+                  value={form.stars}
+                  onChange={(e) =>
+                    setForm({ ...form, stars: Number(e.target.value) })
+                  }
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-blue-100">
+                  Goles 2024
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.goals2024}
+                  onChange={(e) =>
+                    setForm({ ...form, goals2024: Number(e.target.value) })
+                  }
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-blue-100">
+                  Goles 2025
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.goals2025}
+                  onChange={(e) =>
+                    setForm({ ...form, goals2025: Number(e.target.value) })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-white/12 bg-[#0A1B42]/70 px-3.5 py-3">
+              <div>
+                <p className="text-sm font-bold text-white">
+                  Convocado 4° Edición (2026)
+                </p>
+                <p className="text-[11px] text-blue-200/70">
+                  Si se desactiva, queda solo en el padrón histórico.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={form.convocadoActual}
+                onChange={(e) =>
+                  setForm({ ...form, convocadoActual: e.target.checked })
+                }
+                className="h-5 w-5 accent-[#D49B35] cursor-pointer"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={!form.name.trim()}
+                onClick={handleSavePlayer}
+              >
+                {form.id ? "Guardar Cambios" : "Agregar Jugador"}
+              </Button>
+
+              {form.id && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="w-full text-red-300 hover:bg-red-500/15 hover:text-red-200"
+                  onClick={() => handleDeletePlayer(form.id!, form.name)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar jugador del padrón
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

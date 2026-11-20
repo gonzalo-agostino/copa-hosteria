@@ -8,12 +8,21 @@ export interface Edition {
   shortName: string;
   year: number;
   date: string;
+  champion?: string;
   isActive: boolean;
 }
+
+export type PlayerPosition =
+  | ""
+  | "Arquero"
+  | "Defensor"
+  | "Mediocampista"
+  | "Delantero";
 
 export interface Player {
   id: string;
   name: string;
+  position?: PlayerPosition;
   stars: number; // Champion stars (★)
   goals2024?: number;
   goals2025: number;

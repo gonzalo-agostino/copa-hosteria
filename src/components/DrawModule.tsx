@@ -782,7 +782,7 @@ export function DrawModule({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-white">
-                        Equipos · 4° Edición (28.11.2026)
+                        Equipos · 4° Edición (28/11/2026)
                       </h2>
                       <Badge variant="gold">
                         {totalDrawn} / {activePlayersCount} sorteados

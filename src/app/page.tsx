@@ -5,7 +5,7 @@ import { CopaHosteriaApp } from "@/components/CopaHosteriaApp";
 
 async function TournamentLoader() {
   await connection();
-  const initialDB = readDB();
+  const initialDB = await readDB();
   return <CopaHosteriaApp initialDB={initialDB} />;
 }
 
