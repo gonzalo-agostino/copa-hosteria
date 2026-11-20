@@ -80,15 +80,26 @@ export function StatsModule({ db }: StatsModuleProps) {
     [playerStats]
   );
 
+  const playerMap = useMemo(
+    () => new Map(db.players.map((p) => [p.id, p])),
+    [db.players]
+  );
+
   const officialEditions = useMemo(() => {
     const hasSyncedEditions =
       Array.isArray(db.editions) &&
       db.editions.length === SEED_EDITIONS.length &&
-      db.editions.every(
-        (ed, idx) =>
-          ed.date === SEED_EDITIONS[idx].date &&
-          ed.champion === SEED_EDITIONS[idx].champion
-      );
+      db.editions.every((ed, idx) => {
+        const seedEd = SEED_EDITIONS[idx];
+        const sameIds =
+          JSON.stringify(ed.championPlayerIds ?? []) ===
+          JSON.stringify(seedEd.championPlayerIds ?? []);
+        return (
+          ed.date === seedEd.date &&
+          ed.champion === seedEd.champion &&
+          sameIds
+        );
+      });
     return hasSyncedEditions ? db.editions : SEED_EDITIONS;
   }, [db.editions]);
 
@@ -141,6 +152,29 @@ export function StatsModule({ db }: StatsModuleProps) {
                     ? "Próxima edición"
                     : (ed.champion ?? "Edición anterior")}
                 </p>
+                {!ed.isActive &&
+                  ed.championPlayerIds &&
+                  ed.championPlayerIds.length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap gap-1 border-t border-white/10 pt-2">
+                      {ed.championPlayerIds.map((pid) => {
+                        const p = playerMap.get(pid);
+                        if (!p) return null;
+                        return (
+                          <span
+                            key={pid}
+                            className="inline-flex items-center gap-1 rounded-md bg-white/8 px-1.5 py-0.5 text-[10px] font-medium text-blue-100/90"
+                          >
+                            <span>{p.name}</span>
+                            {p.position === "Arquero" && (
+                              <span className="text-[9px] font-bold text-[#F5CE78]">
+                                (ARQ)
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
               </div>
             ))}
           </CardContent>

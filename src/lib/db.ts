@@ -15,11 +15,17 @@ function normalizeDB(db: TournamentDB): TournamentDB {
   const hasAllOfficialEditions =
     Array.isArray(db.editions) &&
     db.editions.length === SEED_EDITIONS.length &&
-    db.editions.every(
-      (ed, idx) =>
-        ed.date === SEED_EDITIONS[idx].date &&
-        ed.champion === SEED_EDITIONS[idx].champion
-    );
+    db.editions.every((ed, idx) => {
+      const seedEd = SEED_EDITIONS[idx];
+      const sameIds =
+        JSON.stringify(ed.championPlayerIds ?? []) ===
+        JSON.stringify(seedEd.championPlayerIds ?? []);
+      return (
+        ed.date === seedEd.date &&
+        ed.champion === seedEd.champion &&
+        sameIds
+      );
+    });
 
   const seedPlayerMap = new Map(SEED_PLAYERS.map((p) => [p.id, p]));
   const existingIds = new Set(db.players.map((p) => p.id));
@@ -28,11 +34,14 @@ function normalizeDB(db: TournamentDB): TournamentDB {
   const syncedPlayers = db.players.map((p) => {
     const seed = seedPlayerMap.get(p.id);
     if (!seed) return p;
-    if (
-      p.goalsEd1 === seed.goalsEd1 &&
-      p.goalsEd2 === seed.goalsEd2 &&
-      p.goals2024 === seed.goals2024
-    ) {
+    const needsGoalsSync =
+      p.goalsEd1 !== seed.goalsEd1 ||
+      p.goalsEd2 !== seed.goalsEd2 ||
+      p.goals2024 !== seed.goals2024;
+    const needsPositionSync = !p.position && Boolean(seed.position);
+    const needsStarsSync = p.id === "p-51" && p.stars === 0 && seed.stars > 0;
+
+    if (!needsGoalsSync && !needsPositionSync && !needsStarsSync) {
       return p;
     }
     playersChanged = true;
@@ -41,6 +50,8 @@ function normalizeDB(db: TournamentDB): TournamentDB {
       goalsEd1: seed.goalsEd1,
       goalsEd2: seed.goalsEd2,
       goals2024: seed.goals2024,
+      ...(needsPositionSync ? { position: seed.position } : {}),
+      ...(needsStarsSync ? { stars: seed.stars } : {}),
     };
   });
 

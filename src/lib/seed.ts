@@ -1,4 +1,4 @@
-import { Edition, Player, Team, TournamentDB, DrawState, Pot } from "@/types/tournament";
+import { Edition, Player, PlayerPosition, Team, TournamentDB, DrawState, Pot } from "@/types/tournament";
 
 export const ORGANIZER_PIN = "1129";
 
@@ -34,6 +34,7 @@ export const SEED_EDITIONS: Edition[] = [
     year: 2024,
     date: "13/01/2024",
     champion: "GOLF IS NOT FOR SALE",
+    championPlayerIds: ["p-42", "p-20", "p-51", "p-17", "p-18"],
     isActive: false,
   },
   {
@@ -43,6 +44,7 @@ export const SEED_EDITIONS: Edition[] = [
     year: 2024,
     date: "30/11/2024",
     champion: "ORTO Y TETAS",
+    championPlayerIds: ["p-53", "p-46", "p-01", "p-26", "p-41"],
     isActive: false,
   },
   {
@@ -52,6 +54,7 @@ export const SEED_EDITIONS: Edition[] = [
     year: 2025,
     date: "06/12/2025",
     champion: "LUCCA FC",
+    championPlayerIds: ["p-54", "p-35", "p-22", "p-09", "p-41", "p-39", "p-55"],
     isActive: false,
   },
   {
@@ -71,11 +74,13 @@ function makePlayer(
   goals2025: number,
   convocadoActual = true,
   goalsEd1 = 0,
-  goalsEd2 = 0
+  goalsEd2 = 0,
+  position: PlayerPosition = ""
 ): Player {
   return {
     id: `p-${String(index).padStart(2, "0")}`,
     name,
+    ...(position ? { position } : {}),
     stars,
     goalsEd1,
     goalsEd2,
@@ -142,8 +147,11 @@ export const SEED_PLAYERS: Player[] = [
   makePlayer(48, "Nicolás Etcheto", 0, 0, false, 7, 0),
   makePlayer(49, "Ignacio Mardones", 0, 0, false, 5, 0),
   makePlayer(50, "Federico Demeco", 0, 0, false, 2, 2),
-  makePlayer(51, "Ignacio Molina", 0, 0, false, 2, 0),
+  makePlayer(51, "Ignacio Molina", 1, 0, false, 2, 0),
   makePlayer(52, "Nacho Rodriguez", 0, 0, false, 0, 1),
+  makePlayer(53, "Gonzalo Pighin", 1, 0, false, 0, 0, "Arquero"),
+  makePlayer(54, "Gregorio Aner", 1, 0, false, 0, 0, "Arquero"),
+  makePlayer(55, "Juan Urtasun", 1, 0, false),
 ];
 
 export function buildSuggestedPots(players: Player[], teamCount: number): Pot[] {

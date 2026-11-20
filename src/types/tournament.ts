@@ -9,6 +9,7 @@ export interface Edition {
   year: number;
   date: string;
   champion?: string;
+  championPlayerIds?: string[];
   isActive: boolean;
 }
 
