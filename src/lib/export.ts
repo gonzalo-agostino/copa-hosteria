@@ -240,3 +240,323 @@ export async function downloadTeamsPosterPng(teams: Team[], players: Player[]) {
   link.href = canvas.toDataURL("image/png");
   link.click();
 }
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
+}
+
+function getChampionLabel(stars: number): string {
+  if (stars === 1) return "★  CAMPEÓN COPA HOSTERÍA  ★";
+  if (stars === 2) return "★★  BICAMPEÓN COPA HOSTERÍA  ★★";
+  if (stars >= 3) return `${"★".repeat(stars)}  MULTICAMPEÓN COPA HOSTERÍA  ${"★".repeat(stars)}`;
+  return "CONVOCADO · 4° EDICIÓN";
+}
+
+export async function downloadPlayerCardPng(
+  player: Player,
+  team?: Team | null,
+  potNumber?: number | null
+) {
+  const [logoImg, photoImg] = await Promise.all([
+    loadLogoImage("/logo-copa-hosteria.jpg"),
+    player.photoUrl ? loadLogoImage(player.photoUrl) : Promise.resolve(null),
+  ]);
+
+  const width = 1080;
+  const height = 1350;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  // Deep royal blue background gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+  bgGrad.addColorStop(0, "#071433");
+  bgGrad.addColorStop(0.45, "#0F2557");
+  bgGrad.addColorStop(1, "#16357A");
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Golden radial aura behind avatar
+  const aura = ctx.createRadialGradient(width / 2, 470, 40, width / 2, 470, 430);
+  aura.addColorStop(0, "rgba(212, 155, 53, 0.34)");
+  aura.addColorStop(0.6, "rgba(212, 155, 53, 0.08)");
+  aura.addColorStop(1, "rgba(212, 155, 53, 0)");
+  ctx.fillStyle = aura;
+  ctx.fillRect(0, 80, width, 820);
+
+  // Outer double gold frame
+  ctx.strokeStyle = "#D49B35";
+  ctx.lineWidth = 5;
+  drawRoundedRect(ctx, 28, 28, width - 56, height - 56, 40);
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(240, 196, 107, 0.35)";
+  ctx.lineWidth = 2;
+  drawRoundedRect(ctx, 44, 44, width - 88, height - 88, 30);
+  ctx.stroke();
+
+  // Top Header with official logo
+  if (logoImg) {
+    const logoSize = 96;
+    const logoX = 76;
+    const logoY = 74;
+    ctx.save();
+    drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 18);
+    ctx.clip();
+    ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+    ctx.restore();
+    ctx.strokeStyle = "#D49B35";
+    ctx.lineWidth = 2.5;
+    drawRoundedRect(ctx, logoX, logoY, logoSize, logoSize, 18);
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "900 40px system-ui, -apple-system, sans-serif";
+    ctx.fillText("COPA HOSTERÍA", logoX + logoSize + 24, 118);
+
+    ctx.fillStyle = "#F0C46B";
+    ctx.font = "700 22px system-ui, -apple-system, sans-serif";
+    ctx.fillText("4° EDICIÓN  ·  28.11.2026", logoX + logoSize + 24, 154);
+  } else {
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "900 44px system-ui, -apple-system, sans-serif";
+    ctx.fillText("COPA HOSTERÍA · 4° EDICIÓN", width / 2, 130);
+  }
+
+  // Pot badge top-right (if drawn from a pot)
+  if (potNumber) {
+    const pillW = 190;
+    const pillH = 48;
+    const pillX = width - 76 - pillW;
+    const pillY = 98;
+    ctx.fillStyle = "rgba(212, 155, 53, 0.18)";
+    drawRoundedRect(ctx, pillX, pillY, pillW, pillH, 24);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(240, 196, 107, 0.7)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#F0C46B";
+    ctx.font = "800 22px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(`BOMBO ${potNumber}`, pillX + pillW / 2, pillY + 32);
+  }
+
+  // Gold divider
+  ctx.strokeStyle = "rgba(212, 155, 53, 0.45)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(76, 196);
+  ctx.lineTo(width - 76, 196);
+  ctx.stroke();
+
+  // Champion / Status Pill
+  const champLabel = getChampionLabel(player.stars);
+  const badgeW = player.stars > 0 ? 640 : 440;
+  const badgeH = 54;
+  const badgeX = (width - badgeW) / 2;
+  const badgeY = 224;
+  ctx.fillStyle =
+    player.stars > 0 ? "rgba(212, 155, 53, 0.22)" : "rgba(255, 255, 255, 0.08)";
+  drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 27);
+  ctx.fill();
+  ctx.strokeStyle =
+    player.stars > 0 ? "#F0C46B" : "rgba(255, 255, 255, 0.25)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = player.stars > 0 ? "#F5CE78" : "#DBEAFE";
+  ctx.font = "800 22px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(champLabel, width / 2, badgeY + 35);
+
+  // Player Circular Photo / Avatar
+  const cx = width / 2;
+  const cy = 468;
+  const radius = 158;
+
+  // Outer gold ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 12, 0, Math.PI * 2);
+  ctx.strokeStyle = player.stars > 0 ? "#F0C46B" : "rgba(212, 155, 53, 0.65)";
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.clip();
+
+  if (photoImg) {
+    // Center-crop cover
+    const scale = Math.max(
+      (radius * 2) / photoImg.width,
+      (radius * 2) / photoImg.height
+    );
+    const dw = photoImg.width * scale;
+    const dh = photoImg.height * scale;
+    ctx.drawImage(photoImg, cx - dw / 2, cy - dh / 2, dw, dh);
+  } else {
+    const avGrad = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+    avGrad.addColorStop(0, "#1D4396");
+    avGrad.addColorStop(1, "#0A1B42");
+    ctx.fillStyle = avGrad;
+    ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+    ctx.fillStyle = "#F0C46B";
+    ctx.font = "900 116px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(getInitials(player.name), cx, cy + 6);
+    ctx.textBaseline = "alphabetic";
+  }
+  ctx.restore();
+
+  // Player Name
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = "900 62px system-ui, -apple-system, sans-serif";
+  ctx.fillText(player.name.toUpperCase(), width / 2, 708);
+
+  // Position & Stars row
+  const subParts: string[] = [];
+  if (player.position) subParts.push(player.position.toUpperCase());
+  if (player.stars > 0) subParts.push("★".repeat(player.stars));
+  if (subParts.length > 0) {
+    ctx.fillStyle = "#F5CE78";
+    ctx.font = "800 30px system-ui, -apple-system, sans-serif";
+    ctx.fillText(subParts.join("   ·   "), width / 2, 756);
+  }
+
+  // Team Banner (if drawn to a team)
+  const teamBoxY = 796;
+  if (team) {
+    const tW = 760;
+    const tH = 92;
+    const tX = (width - tW) / 2;
+    ctx.fillStyle = "rgba(7, 20, 51, 0.85)";
+    drawRoundedRect(ctx, tX, teamBoxY, tW, tH, 24);
+    ctx.fill();
+    ctx.strokeStyle = team.color === "#F8FAFC" ? "#F0C46B" : team.color;
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    // Jersey color circle
+    ctx.fillStyle = team.color;
+    ctx.beginPath();
+    ctx.arc(tX + 54, teamBoxY + tH / 2, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(219, 234, 254, 0.78)";
+    ctx.font = "700 18px system-ui, -apple-system, sans-serif";
+    ctx.fillText("EQUIPO ASIGNADO", tX + 98, teamBoxY + 34);
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "900 34px system-ui, -apple-system, sans-serif";
+    ctx.fillText(team.name.toUpperCase(), tX + 98, teamBoxY + 72);
+  }
+
+  // Historical Stats Cards (2 side-by-side boxes)
+  const statsY = team ? 928 : 842;
+  const boxGap = 28;
+  const boxW = (width - 152 - boxGap) / 2;
+  const boxH = 236;
+  const leftX = 76;
+  const rightX = leftX + boxW + boxGap;
+
+  // Box 1: Campeonatos
+  ctx.fillStyle = "rgba(7, 20, 51, 0.82)";
+  drawRoundedRect(ctx, leftX, statsY, boxW, boxH, 24);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(212, 155, 53, 0.45)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#F0C46B";
+  ctx.font = "700 21px system-ui, -apple-system, sans-serif";
+  ctx.fillText("HISTORIAL DE TÍTULOS", leftX + boxW / 2, statsY + 46);
+
+  ctx.fillStyle = player.stars > 0 ? "#F5CE78" : "#94A3B8";
+  ctx.font = "900 64px system-ui, -apple-system, sans-serif";
+  ctx.fillText(
+    player.stars > 0 ? "★".repeat(player.stars) : "—",
+    leftX + boxW / 2,
+    statsY + 132
+  );
+
+  ctx.fillStyle = "#E2E8F0";
+  ctx.font = "700 22px system-ui, -apple-system, sans-serif";
+  ctx.fillText(
+    player.stars === 1
+      ? "1 vez Campeón"
+      : player.stars > 1
+        ? `${player.stars} veces Campeón`
+        : "En busca de su 1ª estrella",
+    leftX + boxW / 2,
+    statsY + 188
+  );
+
+  // Box 2: Goles en temporadas pasadas
+  const goals2024 = player.goals2024 ?? 0;
+  const goals2025 = player.goals2025 ?? 0;
+  const totalPastGoals = goals2024 + goals2025;
+
+  ctx.fillStyle = "rgba(7, 20, 51, 0.82)";
+  drawRoundedRect(ctx, rightX, statsY, boxW, boxH, 24);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(212, 155, 53, 0.45)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = "#F0C46B";
+  ctx.font = "700 21px system-ui, -apple-system, sans-serif";
+  ctx.fillText("GOLES TEMPORADAS PASADAS", rightX + boxW / 2, statsY + 46);
+
+  ctx.fillStyle = totalPastGoals > 0 ? "#FFFFFF" : "#94A3B8";
+  ctx.font = "900 78px system-ui, -apple-system, sans-serif";
+  ctx.fillText(String(totalPastGoals), rightX + boxW / 2, statsY + 138);
+
+  const breakdown: string[] = [];
+  if (goals2024 > 0) breakdown.push(`2024: ${goals2024}G`);
+  if (goals2025 > 0) breakdown.push(`2025: ${goals2025}G`);
+  ctx.fillStyle = "#E2E8F0";
+  ctx.font = "700 22px system-ui, -apple-system, sans-serif";
+  ctx.fillText(
+    breakdown.length > 0
+      ? breakdown.join("  ·  ")
+      : "Sin goles previos registrados",
+    rightX + boxW / 2,
+    statsY + 188
+  );
+
+  // Footer
+  ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+  ctx.font = "700 20px system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "COPA HOSTERÍA  ·  4° EDICIÓN  ·  28.11.2026",
+    width / 2,
+    height - 76
+  );
+
+  // Trigger download
+  const slug = player.name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  const link = document.createElement("a");
+  link.download = `copa-hosteria-tarjeta-${slug}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}

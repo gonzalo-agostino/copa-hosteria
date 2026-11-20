@@ -48,7 +48,8 @@
       "assists2025": 0,
       "yellowCards2025": 0,
       "redCards2025": 0,
-      "convocadoActual": true
+      "convocadoActual": true,
+      "photoUrl": "/uploads/players/p-01-1795205296579.jpg"
     },
     {
       "id": "p-02",
@@ -720,46 +721,86 @@
       "editionId": "ed-2026",
       "name": "Equipo Azul",
       "color": "#2563EB",
-      "playerIds": []
+      "playerIds": [
+        "p-01",
+        "p-42",
+        "p-39",
+        "p-25",
+        "p-21",
+        "p-13",
+        "p-19",
+        "p-40",
+        "p-05"
+      ]
     },
     {
       "id": "team-2",
       "editionId": "ed-2026",
       "name": "Equipo Dorado",
       "color": "#D49B35",
-      "playerIds": []
+      "playerIds": [
+        "p-22",
+        "p-18",
+        "p-37",
+        "p-07",
+        "p-10",
+        "p-33",
+        "p-29",
+        "p-11"
+      ]
     },
     {
       "id": "team-3",
       "editionId": "ed-2026",
       "name": "Equipo Rojo",
       "color": "#DC2626",
-      "playerIds": []
+      "playerIds": [
+        "p-09",
+        "p-35",
+        "p-27",
+        "p-36",
+        "p-23",
+        "p-28",
+        "p-02",
+        "p-30",
+        "p-04"
+      ]
     },
     {
       "id": "team-4",
       "editionId": "ed-2026",
       "name": "Equipo Verde",
       "color": "#16A34A",
-      "playerIds": []
+      "playerIds": [
+        "p-41",
+        "p-20",
+        "p-31",
+        "p-06",
+        "p-32",
+        "p-38",
+        "p-08",
+        "p-16"
+      ]
     },
     {
       "id": "team-5",
       "editionId": "ed-2026",
       "name": "Equipo Blanco",
       "color": "#F8FAFC",
-      "playerIds": []
-    },
-    {
-      "id": "team-6",
-      "editionId": "ed-2026",
-      "name": "Equipo Celeste",
-      "color": "#0EA5E9",
-      "playerIds": []
+      "playerIds": [
+        "p-26",
+        "p-17",
+        "p-24",
+        "p-15",
+        "p-14",
+        "p-12",
+        "p-03",
+        "p-34"
+      ]
     }
   ],
   "draw": {
-    "teamCount": 6,
+    "teamCount": 5,
     "pots": [
       {
         "id": "pot-1",
@@ -770,8 +811,7 @@
           "p-22",
           "p-09",
           "p-26",
-          "p-01",
-          "p-18"
+          "p-01"
         ]
       },
       {
@@ -779,12 +819,11 @@
         "number": 2,
         "name": "Bombo 2",
         "playerIds": [
+          "p-18",
           "p-35",
           "p-20",
           "p-17",
-          "p-42",
-          "p-39",
-          "p-24"
+          "p-42"
         ]
       },
       {
@@ -792,12 +831,11 @@
         "number": 3,
         "name": "Bombo 3",
         "playerIds": [
+          "p-39",
+          "p-24",
           "p-31",
           "p-27",
-          "p-37",
-          "p-15",
-          "p-07",
-          "p-25"
+          "p-37"
         ]
       },
       {
@@ -805,12 +843,11 @@
         "number": 4,
         "name": "Bombo 4",
         "playerIds": [
+          "p-15",
+          "p-07",
+          "p-25",
           "p-36",
-          "p-06",
-          "p-14",
-          "p-10",
-          "p-21",
-          "p-32"
+          "p-06"
         ]
       },
       {
@@ -818,7 +855,18 @@
         "number": 5,
         "name": "Bombo 5",
         "playerIds": [
-          "p-23",
+          "p-14",
+          "p-10",
+          "p-21",
+          "p-32",
+          "p-23"
+        ]
+      },
+      {
+        "id": "pot-6",
+        "number": 6,
+        "name": "Bombo 6",
+        "playerIds": [
           "p-28",
           "p-33",
           "p-38",
@@ -827,38 +875,156 @@
         ]
       },
       {
-        "id": "pot-6",
-        "number": 6,
-        "name": "Bombo 6",
+        "id": "pot-7",
+        "number": 7,
+        "name": "Bombo 7",
         "playerIds": [
           "p-08",
           "p-03",
           "p-02",
           "p-19",
-          "p-29",
-          "p-34"
+          "p-29"
         ]
       },
       {
-        "id": "pot-7",
-        "number": 7,
-        "name": "Bombo 7",
+        "id": "pot-8",
+        "number": 8,
+        "name": "Bombo 8",
         "playerIds": [
+          "p-34",
           "p-30",
           "p-11",
           "p-40",
-          "p-16",
+          "p-16"
+        ]
+      },
+      {
+        "id": "pot-9",
+        "number": 9,
+        "name": "Bombo 9",
+        "playerIds": [
           "p-04",
           "p-05"
         ]
       }
     ],
-    "drawnPlayerIds": [],
+    "drawnPlayerIds": [
+      "p-26",
+      "p-22",
+      "p-41",
+      "p-09",
+      "p-01",
+      "p-42",
+      "p-18",
+      "p-17",
+      "p-20",
+      "p-35",
+      "p-37",
+      "p-27",
+      "p-24",
+      "p-39",
+      "p-31",
+      "p-25",
+      "p-07",
+      "p-36",
+      "p-06",
+      "p-15",
+      "p-10",
+      "p-14",
+      "p-21",
+      "p-23",
+      "p-32",
+      "p-28",
+      "p-33",
+      "p-38",
+      "p-13",
+      "p-12",
+      "p-03",
+      "p-08",
+      "p-29",
+      "p-02",
+      "p-19",
+      "p-11",
+      "p-40",
+      "p-30",
+      "p-34",
+      "p-16",
+      "p-05",
+      "p-04"
+    ],
     "currentPotIndex": 0,
-    "potTeamOrders": {},
-    "isComplete": false,
-    "lastDrawn": null
+    "potTeamOrders": {
+      "0": [
+        4,
+        1,
+        3,
+        2,
+        0
+      ],
+      "1": [
+        0,
+        1,
+        4,
+        3,
+        2
+      ],
+      "2": [
+        1,
+        2,
+        4,
+        0,
+        3
+      ],
+      "3": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "4": [
+        1,
+        4,
+        0,
+        2,
+        3
+      ],
+      "5": [
+        2,
+        1,
+        3,
+        0,
+        4
+      ],
+      "6": [
+        4,
+        3,
+        1,
+        2,
+        0
+      ],
+      "7": [
+        1,
+        0,
+        2,
+        4,
+        3
+      ],
+      "8": [
+        0,
+        2,
+        4,
+        3,
+        1
+      ]
+    },
+    "isComplete": true,
+    "lastDrawn": {
+      "playerId": "p-04",
+      "teamId": "team-3",
+      "potNumber": 9
+    }
   },
   "matches": [],
-  "updatedAt": "2026-11-20T20:01:57.300Z"
+  "updatedAt": "2026-11-20T20:11:26.746Z"
 }

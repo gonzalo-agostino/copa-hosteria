@@ -11,9 +11,11 @@ import {
   Loader2,
   Pencil,
   UserPlus,
+  Download,
 } from "lucide-react";
-import { Player, PlayerPosition, TournamentDB } from "@/types/tournament";
+import { Player, PlayerPosition, Team, TournamentDB } from "@/types/tournament";
 import { formatStars } from "@/lib/utils";
+import { downloadPlayerCardPng } from "@/lib/export";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -117,10 +119,10 @@ export function PlayersRosterModule({
   const targetPlayerIdRef = useRef<string | null>(null);
 
   const teamByPlayer = useMemo(() => {
-    const map = new Map<string, { name: string; color: string }>();
+    const map = new Map<string, Team>();
     for (const t of db.teams) {
       for (const pid of t.playerIds) {
-        map.set(pid, { name: t.name, color: t.color });
+        map.set(pid, t);
       }
     }
     return map;
@@ -565,39 +567,54 @@ export function PlayersRosterModule({
                   </div>
                 </div>
 
-                {isOrganizer && (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => openEditModal(p)}
-                      title="Editar datos del jugador"
-                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-white transition active:scale-95 hover:border-[#D49B35]/60 hover:bg-[#D49B35]/20 hover:text-[#F5CE78]"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => triggerPhotoPicker(p.id)}
-                      title={p.photoUrl ? "Cambiar foto" : "Subir foto"}
-                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#D49B35]/40 bg-[#D49B35]/15 text-[#F5CE78] transition active:scale-95 hover:bg-[#D49B35]/25 disabled:opacity-45"
-                    >
-                      <Camera className="h-4 w-4" />
-                    </button>
-                    {p.photoUrl && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pot = db.draw.pots.find((pt) =>
+                        pt.playerIds.includes(p.id)
+                      );
+                      downloadPlayerCardPng(p, team ?? null, pot?.number ?? null);
+                    }}
+                    title="Descargar tarjeta PNG del jugador"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-blue-100 transition active:scale-95 hover:border-[#D49B35]/60 hover:bg-[#D49B35]/20 hover:text-[#F5CE78] cursor-pointer"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                  {isOrganizer && (
+                    <>
                       <button
                         type="button"
                         disabled={isBusy}
-                        onClick={() => handleDeletePhoto(p.id)}
-                        title="Eliminar foto"
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-blue-200/60 transition active:scale-95 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-45"
+                        onClick={() => openEditModal(p)}
+                        title="Editar datos del jugador"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-white transition active:scale-95 hover:border-[#D49B35]/60 hover:bg-[#D49B35]/20 hover:text-[#F5CE78]"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Pencil className="h-4 w-4" />
                       </button>
-                    )}
-                  </div>
-                )}
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => triggerPhotoPicker(p.id)}
+                        title={p.photoUrl ? "Cambiar foto" : "Subir foto"}
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#D49B35]/40 bg-[#D49B35]/15 text-[#F5CE78] transition active:scale-95 hover:bg-[#D49B35]/25 disabled:opacity-45"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </button>
+                      {p.photoUrl && (
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleDeletePhoto(p.id)}
+                          title="Eliminar foto"
+                          className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-blue-200/60 transition active:scale-95 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-45"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </CardContent>
             </Card>
           );

@@ -22,7 +22,11 @@ import {
   DEFAULT_TEAMS_META,
   TEAM_COLOR_PRESETS,
 } from "@/lib/seed";
-import { buildWhatsAppTeamsText, downloadTeamsPosterPng } from "@/lib/export";
+import {
+  buildWhatsAppTeamsText,
+  downloadPlayerCardPng,
+  downloadTeamsPosterPng,
+} from "@/lib/export";
 import { exportTeamsSheetPdf } from "@/lib/exportPdf";
 import { formatStars } from "@/lib/utils";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
@@ -707,9 +711,21 @@ export function DrawModule({
                           )}
                         </p>
                       </div>
-                      <div className="mt-1.5 flex items-center justify-center gap-2 text-xs text-blue-200">
-                        {lastDrawnPlayer.goals2025 > 0 && (
-                          <span>{lastDrawnPlayer.goals2025} goles en 2025 ·</span>
+                      <div className="mt-1.5 flex flex-wrap items-center justify-center gap-2 text-xs text-blue-200">
+                        {lastDrawnPlayer.stars > 0 && (
+                          <span className="rounded-md bg-[#D49B35]/20 px-2 py-0.5 font-bold text-[#F5CE78]">
+                            {lastDrawnPlayer.stars === 1
+                              ? "Campeón ★"
+                              : `${lastDrawnPlayer.stars}× Campeón ${formatStars(lastDrawnPlayer.stars)}`}
+                          </span>
+                        )}
+                        {((lastDrawnPlayer.goals2024 ?? 0) +
+                          lastDrawnPlayer.goals2025) > 0 && (
+                          <span>
+                            {(lastDrawnPlayer.goals2024 ?? 0) +
+                              lastDrawnPlayer.goals2025}{" "}
+                            goles prev. ·
+                          </span>
                         )}
                         <span className="inline-flex items-center gap-1.5 font-bold text-white">
                           <span
@@ -718,6 +734,23 @@ export function DrawModule({
                           />
                           {lastDrawnTeam.name}
                         </span>
+                      </div>
+                      <div className="mt-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            downloadPlayerCardPng(
+                              lastDrawnPlayer,
+                              lastDrawnTeam,
+                              db.draw.lastDrawn?.potNumber
+                            )
+                          }
+                          className="w-full"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Descargar tarjeta del jugador (PNG)
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -947,11 +980,28 @@ export function DrawModule({
                                   {formatStars(p.stars)}
                                 </span>
                               )}
-                              {p.goals2025 > 0 && (
+                              {((p.goals2024 ?? 0) + p.goals2025) > 0 && (
                                 <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] font-bold text-blue-100">
-                                  {p.goals2025}G
+                                  {(p.goals2024 ?? 0) + p.goals2025}G
                                 </span>
                               )}
+                              <button
+                                type="button"
+                                title={`Descargar tarjeta PNG de ${p.name}`}
+                                onClick={() => {
+                                  const pot = db.draw.pots.find((pt) =>
+                                    pt.playerIds.includes(p.id)
+                                  );
+                                  downloadPlayerCardPng(
+                                    p,
+                                    team,
+                                    pot?.number ?? null
+                                  );
+                                }}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#D49B35]/35 bg-[#D49B35]/15 text-[#F5CE78] transition active:scale-95 hover:bg-[#D49B35]/30 cursor-pointer"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           </div>
                         );
