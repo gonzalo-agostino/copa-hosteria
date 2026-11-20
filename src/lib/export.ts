@@ -709,10 +709,6 @@ export async function downloadSingleTeamCardPng(
 
   // Squad aggregate stats row inside banner
   const totalStars = teamPlayers.reduce((sum, p) => sum + p.stars, 0);
-  const totalGoals = teamPlayers.reduce(
-    (sum, p) => sum + (p.goals2024 ?? 0) + p.goals2025,
-    0
-  );
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
   drawRoundedRect(ctx, bannerX + 24, bannerY + 126, bannerW - 48, 44, 14);
@@ -722,7 +718,7 @@ export async function downloadSingleTeamCardPng(
   ctx.font = "700 20px system-ui, -apple-system, sans-serif";
   ctx.textAlign = "center";
   ctx.fillText(
-    `${teamPlayers.length} JUGADORES    ·    ★ ${totalStars} TÍTULOS EN PLANTEL    ·    ⚽ ${totalGoals} GOLES HISTÓRICOS`,
+    `${teamPlayers.length} JUGADORES    ·    ★ ${totalStars} ${totalStars === 1 ? "TÍTULO" : "TÍTULOS"} DE CAMPEÓN EN PLANTEL`,
     width / 2,
     bannerY + 155
   );
@@ -804,31 +800,12 @@ export async function downloadSingleTeamCardPng(
     ctx.font = "700 18px system-ui, -apple-system, sans-serif";
     ctx.fillText(subBits.join("  ·  "), textX, ry + 78);
 
-    // Right side stats: Past goals & Stars
-    let rightCursor = rx + rw - 28;
-    const pastGoals = (p.goals2024 ?? 0) + p.goals2025;
-
-    if (pastGoals > 0) {
-      const gText = `${pastGoals} GOLES`;
-      const gW = 128;
-      const gH = 42;
-      const gX = rightCursor - gW;
-      const gY = ry + (rowH - gH) / 2;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.10)";
-      drawRoundedRect(ctx, gX, gY, gW, gH, 12);
-      ctx.fill();
-      ctx.fillStyle = "#DBEAFE";
-      ctx.font = "800 19px system-ui, -apple-system, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(gText, gX + gW / 2, gY + 28);
-      rightCursor = gX - 18;
-    }
-
+    // Right side stats: Stars only (no goals in team card)
     if (p.stars > 0) {
       ctx.fillStyle = "#F5CE78";
-      ctx.font = "900 32px system-ui, -apple-system, sans-serif";
+      ctx.font = "900 34px system-ui, -apple-system, sans-serif";
       ctx.textAlign = "right";
-      ctx.fillText("★".repeat(p.stars), rightCursor, ry + 62);
+      ctx.fillText("★".repeat(p.stars), rx + rw - 28, ry + 62);
     }
   });
 

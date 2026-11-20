@@ -1264,11 +1264,6 @@ export function DrawModule({
                                   {formatStars(p.stars)}
                                 </span>
                               )}
-                              {((p.goals2024 ?? 0) + p.goals2025) > 0 && (
-                                <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] font-bold text-blue-100">
-                                  {(p.goals2024 ?? 0) + p.goals2025}G
-                                </span>
-                              )}
                               {isOrganizer && (
                                 <button
                                   type="button"
