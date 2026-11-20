@@ -41,6 +41,7 @@ export interface Team {
   name: string;
   color: string; // hex color for jersey/badge
   playerIds: string[];
+  captainId?: string | null;
 }
 
 export interface Pot {

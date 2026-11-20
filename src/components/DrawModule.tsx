@@ -151,7 +151,7 @@ export function DrawModule({
   const handleSuggestPots = () => {
     onUpdateDB((prev) => ({
       ...prev,
-      teams: prev.teams.map((t) => ({ ...t, playerIds: [] })),
+      teams: prev.teams.map((t) => ({ ...t, playerIds: [], captainId: null })),
       draw: {
         ...prev.draw,
         pots: buildSuggestedPots(prev.players, prev.teams.length),
@@ -196,6 +196,17 @@ export function DrawModule({
     });
   };
 
+  const handleToggleCaptain = (teamId: string, playerId: string) => {
+    onUpdateDB((prev) => ({
+      ...prev,
+      teams: prev.teams.map((t) =>
+        t.id === teamId
+          ? { ...t, captainId: t.captainId === playerId ? null : playerId }
+          : t
+      ),
+    }));
+  };
+
   const handleUndoLastBall = () => {
     if (isSpinning || db.draw.drawnPlayerIds.length === 0) return;
     onUpdateDB((prev) => {
@@ -207,6 +218,7 @@ export function DrawModule({
       const nextTeams = prev.teams.map((t) => ({
         ...t,
         playerIds: t.playerIds.filter((pid) => pid !== lastPlayerId),
+        captainId: t.captainId === lastPlayerId ? null : t.captainId,
       }));
 
       // Compute previous lastDrawn banner (if any players remain drawn)
@@ -257,7 +269,7 @@ export function DrawModule({
     }
     onUpdateDB((prev) => ({
       ...prev,
-      teams: prev.teams.map((t) => ({ ...t, playerIds: [] })),
+      teams: prev.teams.map((t) => ({ ...t, playerIds: [], captainId: null })),
       draw: {
         ...prev.draw,
         drawnPlayerIds: [],
@@ -412,12 +424,14 @@ export function DrawModule({
           return {
             ...t,
             playerIds: t.playerIds.map((id) => (id === swapA ? swapB : id)),
+            captainId: t.captainId === swapA ? null : t.captainId,
           };
         }
         if (idx === teamBIdx) {
           return {
             ...t,
             playerIds: t.playerIds.map((id) => (id === swapB ? swapA : id)),
+            captainId: t.captainId === swapB ? null : t.captainId,
           };
         }
         return t;
@@ -1021,13 +1035,16 @@ export function DrawModule({
                         const p = playerMap.get(pid);
                         if (!p) return null;
                         const isLatest = db.draw.lastDrawn?.playerId === pid;
+                        const isCaptain = team.captainId === pid;
                         return (
                           <div
                             key={pid}
                             className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm transition ${
                               isLatest
                                 ? "border border-[#F5CE78]/70 bg-[#D49B35]/18 shadow-sm shadow-[#D49B35]/15"
-                                : "border border-white/8 bg-[#143275]/55"
+                                : isCaptain
+                                  ? "border border-[#D49B35]/55 bg-[#D49B35]/12"
+                                  : "border border-white/8 bg-[#143275]/55"
                             }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -1040,6 +1057,14 @@ export function DrawModule({
                               <span className="truncate font-semibold text-white">
                                 {p.name}
                               </span>
+                              {isCaptain && (
+                                <span
+                                  title="Capitán del equipo"
+                                  className="shrink-0 rounded-md bg-gradient-to-b from-[#F5CE78] to-[#D49B35] px-1.5 py-0.5 text-[10px] font-black text-[#071433] shadow-sm"
+                                >
+                                  CAP
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {p.stars > 0 && (
@@ -1054,6 +1079,26 @@ export function DrawModule({
                                 <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] font-bold text-blue-100">
                                   {(p.goals2024 ?? 0) + p.goals2025}G
                                 </span>
+                              )}
+                              {isOrganizer && (
+                                <button
+                                  type="button"
+                                  title={
+                                    isCaptain
+                                      ? "Quitar cinta de capitán"
+                                      : `Designar a ${p.name} como capitán`
+                                  }
+                                  onClick={() =>
+                                    handleToggleCaptain(team.id, p.id)
+                                  }
+                                  className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-black transition active:scale-95 cursor-pointer ${
+                                    isCaptain
+                                      ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
+                                      : "border-white/15 bg-white/6 text-blue-200/75 hover:border-[#D49B35]/60 hover:text-[#F5CE78]"
+                                  }`}
+                                >
+                                  C
+                                </button>
                               )}
                               <button
                                 type="button"

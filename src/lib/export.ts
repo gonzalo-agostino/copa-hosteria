@@ -16,8 +16,9 @@ export function buildWhatsAppTeamsText(teams: Team[], players: Player[]): string
       team.playerIds.forEach((pid) => {
         const p = playerMap.get(pid);
         if (!p) return;
+        const cap = team.captainId === pid ? " (C)" : "";
         const stars = p.stars > 0 ? ` ${"★".repeat(p.stars)}` : "";
-        lines.push(`   • ${p.name}${stars}`);
+        lines.push(`   • ${p.name}${cap}${stars}`);
       });
     }
     lines.push("");
@@ -208,11 +209,14 @@ export async function downloadTeamsPosterPng(teams: Team[], players: Player[]) {
       ctx.textAlign = "center";
       ctx.fillText(String(pIdx + 1), x + 30, py - 2);
 
-      // Player name
-      ctx.fillStyle = "#F8FAFC";
-      ctx.font = "600 21px system-ui, -apple-system, sans-serif";
+      // Player name (+ Captain badge)
+      const isCaptain = team.captainId === pid;
+      ctx.fillStyle = isCaptain ? "#F5CE78" : "#F8FAFC";
+      ctx.font = isCaptain
+        ? "800 21px system-ui, -apple-system, sans-serif"
+        : "600 21px system-ui, -apple-system, sans-serif";
       ctx.textAlign = "left";
-      ctx.fillText(p.name, x + 54, py);
+      ctx.fillText(isCaptain ? `${p.name} (C)` : p.name, x + 54, py);
 
       // Champion stars
       if (p.stars > 0) {
@@ -454,10 +458,15 @@ export async function downloadPlayerCardPng(
     ctx.lineWidth = 3;
     ctx.stroke();
 
+    const isCaptain = team.captainId === player.id;
     ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(219, 234, 254, 0.78)";
+    ctx.fillStyle = isCaptain ? "#F5CE78" : "rgba(219, 234, 254, 0.78)";
     ctx.font = "700 18px system-ui, -apple-system, sans-serif";
-    ctx.fillText("EQUIPO ASIGNADO", tX + 98, teamBoxY + 34);
+    ctx.fillText(
+      isCaptain ? "© CAPITÁN DEL EQUIPO" : "EQUIPO ASIGNADO",
+      tX + 98,
+      teamBoxY + 34
+    );
 
     ctx.fillStyle = "#FFFFFF";
     ctx.font = "900 34px system-ui, -apple-system, sans-serif";

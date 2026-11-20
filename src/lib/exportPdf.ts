@@ -144,9 +144,10 @@ function drawTeamRosterTable(
     doc.line(x + w - 11.5, cursorY, x + w - 11.5, cursorY + rowH);
 
     if (player) {
+      const cap = team.captainId === pid ? " (C)" : "";
       const stars = player.stars > 0 ? ` (${"*".repeat(player.stars)})` : "";
       const suspTag = isSuspended ? " [SUSP]" : "";
-      const label = `${player.name}${stars}${suspTag}`;
+      const label = `${player.name}${cap}${stars}${suspTag}`;
       doc.setTextColor(isSuspended ? 185 : TEXT_DARK[0], isSuspended ? 28 : TEXT_DARK[1], isSuspended ? 28 : TEXT_DARK[2]);
       doc.setFont("helvetica", isSuspended ? "bold" : "normal");
       doc.setFontSize(8);
