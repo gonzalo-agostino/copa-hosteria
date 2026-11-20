@@ -127,6 +127,35 @@ export function DrawModule({
     [db.players]
   );
 
+  const totalCapacity = useMemo(
+    () =>
+      db.teams.reduce(
+        (sum, t) =>
+          sum + getTeamCapacity(t, db.teams.length, activePlayersCount),
+        0
+      ),
+    [db.teams, activePlayersCount]
+  );
+
+  const capacityMismatch = totalCapacity !== activePlayersCount;
+  const capacityDiff = totalCapacity - activePlayersCount;
+
+  const handleAutoBalanceCapacities = () => {
+    onUpdateDB((prev) => {
+      const count = prev.players.filter((p) => p.convocadoActual).length;
+      const n = Math.max(1, prev.teams.length);
+      const base = Math.floor(count / n);
+      const remainder = count % n;
+      return {
+        ...prev,
+        teams: prev.teams.map((t, idx) => ({
+          ...t,
+          maxPlayers: base + (idx < remainder ? 1 : 0),
+        })),
+      };
+    });
+  };
+
   const totalDrawn = db.draw.drawnPlayerIds.length;
   const remainingTotal = Math.max(0, activePlayersCount - totalDrawn);
 
@@ -557,26 +586,39 @@ export function DrawModule({
       )}
 
       {/* STEP: EQUIPOS & CONFIG (Organizer only) */}
-      {isOrganizer && step === "equipos" && (() => {
-        const totalCapacity = db.teams.reduce(
-          (sum, t) => sum + getTeamCapacity(t, db.teams.length, activePlayersCount),
-          0
-        );
-        return (
+      {isOrganizer && step === "equipos" && (
         <Card>
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center justify-between gap-2">
               <span>Configuración de Equipos</span>
-              <Badge
-                variant={
-                  totalCapacity === activePlayersCount ? "gold" : "warning"
-                }
-              >
+              <Badge variant={capacityMismatch ? "danger" : "gold"}>
                 Cupo total: {totalCapacity} / {activePlayersCount} convocados
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {capacityMismatch && (
+              <div className="flex flex-col gap-2.5 rounded-2xl border border-red-400/60 bg-red-950/70 p-3.5 text-xs text-red-100 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-bold text-red-200">
+                    No dan los números de jugadores para sortear
+                  </p>
+                  <p className="mt-0.5 text-red-100/90">
+                    {capacityDiff < 0
+                      ? `Faltan ${Math.abs(capacityDiff)} lugar(es): hay ${activePlayersCount} convocados y solo ${totalCapacity} cupos configurados.`
+                      : `Sobran ${capacityDiff} lugar(es): configuraste ${totalCapacity} cupos pero hay ${activePlayersCount} convocados.`}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={handleAutoBalanceCapacities}
+                  className="shrink-0"
+                >
+                  Repartir automático
+                </Button>
+              </div>
+            )}
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-blue-200/75">
                 Cantidad de equipos
@@ -684,8 +726,7 @@ export function DrawModule({
             </div>
           </CardContent>
         </Card>
-        );
-      })()}
+      )}
 
       {/* STEP: BOMBOS (Organizer only) */}
       {isOrganizer && step === "bombos" && (
@@ -917,26 +958,63 @@ export function DrawModule({
                     </div>
                   )}
 
+                  {/* Capacity Mismatch Blocking Warning */}
+                  {capacityMismatch && (
+                    <div className="my-3 w-full max-w-md rounded-2xl border border-red-400/60 bg-red-950/75 p-3.5 text-left text-xs text-red-100 space-y-2">
+                      <p className="font-bold text-red-200">
+                        No dan los números de jugadores ({totalCapacity} cupos vs{" "}
+                        {activePlayersCount} convocados)
+                      </p>
+                      <p className="text-red-100/90">
+                        {capacityDiff < 0
+                          ? `Te faltan ${Math.abs(capacityDiff)} cupo(s) en los equipos para poder sortear a todos los convocados.`
+                          : `Te sobran ${capacityDiff} cupo(s) en los equipos respecto de los convocados actuales.`}
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-0.5">
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={handleAutoBalanceCapacities}
+                        >
+                          Repartir automático
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setStep("equipos")}
+                        >
+                          Ajustar cupos en Equipos
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Main Action Buttons */}
                   <div className="mt-3 grid w-full max-w-md grid-cols-1 gap-2.5 sm:grid-cols-2">
                     <Button
                       size="xl"
                       onClick={handleDrawSingleWithAnimation}
-                      disabled={isSpinning || remainingTotal === 0}
+                      disabled={
+                        isSpinning || remainingTotal === 0 || capacityMismatch
+                      }
                       className="w-full"
                     >
                       <Dices className="h-5 w-5" />
                       {isSpinning
                         ? "Sacando bolilla..."
-                        : remainingTotal === 0
-                          ? "Sorteo finalizado"
-                          : "Sacar Bolilla"}
+                        : capacityMismatch
+                          ? "Corregí los cupos"
+                          : remainingTotal === 0
+                            ? "Sorteo finalizado"
+                            : "Sacar Bolilla"}
                     </Button>
                     <Button
                       size="xl"
                       variant="secondary"
                       onClick={handleQuickDraw}
-                      disabled={isSpinning || remainingTotal === 0}
+                      disabled={
+                        isSpinning || remainingTotal === 0 || capacityMismatch
+                      }
                       className="w-full"
                     >
                       <Shuffle className="h-5 w-5" />
