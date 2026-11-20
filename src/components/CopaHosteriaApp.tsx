@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Dices,
   CalendarDays,
@@ -35,10 +35,13 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
   >("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSavingRef = useRef(false);
+  const lastUpdatedAtRef = useRef<string>(initialDB.updatedAt);
 
   const persistDB = useCallback((nextDB: TournamentDB) => {
     setSaveState("saving");
     setSaveError(null);
+    isSavingRef.current = true;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       try {
@@ -57,6 +60,10 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
           setSaveError(msg);
           return;
         }
+        const saved = (await res.json().catch(() => null)) as TournamentDB | null;
+        if (saved?.updatedAt) {
+          lastUpdatedAtRef.current = saved.updatedAt;
+        }
         setSaveState("saved");
         setSaveError(null);
         setTimeout(() => setSaveState("idle"), 1600);
@@ -66,8 +73,54 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
         setSaveError(
           err instanceof Error ? err.message : "Error de conexión al guardar"
         );
+      } finally {
+        isSavingRef.current = false;
       }
     }, 150);
+  }, []);
+
+  // Auto-sync live updates every 4s and on tab focus (without overwriting active saves)
+  useEffect(() => {
+    let active = true;
+
+    const syncFromServer = async () => {
+      if (isSavingRef.current) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+      try {
+        const res = await fetch("/api/state", { cache: "no-store" });
+        if (!res.ok || !active || isSavingRef.current) return;
+        const remote = (await res.json()) as TournamentDB;
+        if (
+          remote &&
+          Array.isArray(remote.players) &&
+          remote.updatedAt &&
+          remote.updatedAt !== lastUpdatedAtRef.current
+        ) {
+          lastUpdatedAtRef.current = remote.updatedAt;
+          setDb(remote);
+        }
+      } catch {
+        // silent retry on next tick
+      }
+    };
+
+    const interval = setInterval(syncFromServer, 4000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void syncFromServer();
+      }
+    };
+    window.addEventListener("focus", syncFromServer);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", syncFromServer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   const handleUpdateDB = useCallback(
@@ -236,7 +289,10 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
             db={db}
             isOrganizer={isOrganizer}
             onUpdateDB={handleUpdateDB}
-            onReplaceDB={setDb}
+            onReplaceDB={(next) => {
+              if (next.updatedAt) lastUpdatedAtRef.current = next.updatedAt;
+              setDb(next);
+            }}
             onRequestOrganizer={() => setPinModalOpen(true)}
           />
         )}

@@ -5,7 +5,9 @@ import { TournamentDB } from "@/types/tournament";
 export async function GET() {
   try {
     const db = await readDB();
-    return NextResponse.json(db);
+    return NextResponse.json(db, {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (err) {
     console.error("Error reading tournament DB:", err);
     return NextResponse.json(
