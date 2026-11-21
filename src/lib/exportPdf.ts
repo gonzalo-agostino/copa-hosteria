@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { Match, Player, Team } from "@/types/tournament";
+import { Match, Player, Pot, Team } from "@/types/tournament";
 import { getMatchScore } from "@/lib/stats";
 
 const NAVY: [number, number, number] = [15, 37, 87];
@@ -718,4 +718,236 @@ export async function exportTournamentRulesPdf(teams: Team[] = []) {
   });
 
   doc.save("copa-hosteria-reglamento-oficial-2026.pdf");
+}
+
+export async function exportDrawCutoutSheetsPdf(
+  pots: Pot[],
+  players: Player[]
+) {
+  if (pots.length === 0) return;
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const logoDataUrl = await fetchLogoDataUrl();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const playerMap = new Map(players.map((p) => [p.id, p]));
+
+  // PAGE 1: Master summary of all Bombos for the draw table
+  drawHeader(
+    doc,
+    logoDataUrl,
+    "Planilla de Bombos · Sorteo Físico",
+    "Hoja de referencia de Bombos y lista completa para mesa de control"
+  );
+
+  const cols = 2;
+  const gapX = 6;
+  const marginX = 12;
+  const cardW = (pageW - marginX * 2 - gapX) / cols;
+  let cursorY = 35;
+
+  for (let i = 0; i < pots.length; i += cols) {
+    const pair = pots.slice(i, i + cols);
+    const maxRows = Math.max(
+      ...pair.map(
+        (pot) =>
+          pot.playerIds.length +
+          (pot.reservePlayerIds && pot.reservePlayerIds.length > 0
+            ? pot.reservePlayerIds.length + 1
+            : 0)
+      ),
+      7
+    );
+    const rowH = 6.2;
+    const cardH = 8 + maxRows * rowH + 3;
+
+    if (cursorY + cardH > pageH - 18) {
+      doc.addPage();
+      drawHeader(
+        doc,
+        logoDataUrl,
+        "Planilla de Bombos · Sorteo Físico",
+        "Continuación de Bombos"
+      );
+      cursorY = 35;
+    }
+
+    pair.forEach((pot, colIdx) => {
+      const cx = marginX + colIdx * (cardW + gapX);
+
+      // Card border
+      doc.setDrawColor(...BORDER);
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(cx, cursorY, cardW, cardH, 2, 2, "FD");
+
+      // Header bar
+      doc.setFillColor(...NAVY);
+      doc.roundedRect(cx, cursorY, cardW, 7.5, 2, 2, "F");
+      doc.rect(cx, cursorY + 4, cardW, 3.5, "F");
+
+      doc.setTextColor(245, 206, 120);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(pot.name.toUpperCase(), cx + 3.5, cursorY + 5.2);
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(8);
+      doc.text(`${pot.playerIds.length} tit.`, cx + cardW - 3.5, cursorY + 5.2, {
+        align: "right",
+      });
+
+      let ry = cursorY + 12.2;
+      pot.playerIds.forEach((pid, pIdx) => {
+        const p = playerMap.get(pid);
+        if (!p) return;
+        const stars = p.stars > 0 ? ` (${"*".repeat(p.stars)})` : "";
+        doc.setTextColor(...TEXT_DARK);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.text(`${pIdx + 1}.`, cx + 3.5, ry);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${p.name}${stars}`, cx + 9, ry);
+        ry += rowH;
+      });
+
+      if (pot.reservePlayerIds && pot.reservePlayerIds.length > 0) {
+        doc.setDrawColor(...GOLD);
+        doc.line(cx + 3, ry - 3, cx + cardW - 3, ry - 3);
+        doc.setTextColor(160, 108, 12);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.5);
+        doc.text("SUPLENTE / ALTERNATIVA:", cx + 3.5, ry + 1);
+        ry += rowH;
+
+        pot.reservePlayerIds.forEach((rid) => {
+          const rp = playerMap.get(rid);
+          if (!rp) return;
+          doc.setTextColor(...TEXT_DARK);
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(8.5);
+          doc.text(`• ${rp.name}`, cx + 4.5, ry);
+          ry += rowH;
+        });
+      }
+    });
+
+    cursorY += cardH + 5;
+  }
+
+  // PAGES 2+: Cut-out paper slips (2 Bombos per page, dashed cut lines)
+  const slipCols = 2;
+  const slipGapX = 6;
+  const slipGapY = 3.5;
+  const slipW = (pageW - marginX * 2 - slipGapX) / slipCols;
+  const slipH = 19;
+
+  for (let i = 0; i < pots.length; i += 2) {
+    doc.addPage();
+    drawHeader(
+      doc,
+      logoDataUrl,
+      "Papelitos Recortables para Bolillero Físico",
+      "Cortar por la línea punteada y doblar para colocar en cada bombo"
+    );
+
+    let y = 35;
+    const pagePots = pots.slice(i, i + 2);
+
+    pagePots.forEach((pot) => {
+      // Bombo section bar
+      doc.setFillColor(...NAVY);
+      doc.roundedRect(marginX, y, pageW - marginX * 2, 7.5, 1.5, 1.5, "F");
+      doc.setTextColor(245, 206, 120);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.text(
+        `${pot.name.toUpperCase()}  (${pot.playerIds.length} TITULARES${
+          pot.reservePlayerIds && pot.reservePlayerIds.length > 0
+            ? ` + ${pot.reservePlayerIds.length} SUPLENTE`
+            : ""
+        })`,
+        marginX + 4,
+        y + 5.2
+      );
+      y += 10.5;
+
+      const entries: { player: Player; isReserve: boolean }[] = [];
+      pot.playerIds.forEach((pid) => {
+        const p = playerMap.get(pid);
+        if (p) entries.push({ player: p, isReserve: false });
+      });
+      (pot.reservePlayerIds ?? []).forEach((rid) => {
+        const rp = playerMap.get(rid);
+        if (rp) entries.push({ player: rp, isReserve: true });
+      });
+
+      entries.forEach((entry, idx) => {
+        const col = idx % slipCols;
+        const row = Math.floor(idx / slipCols);
+        const sx = marginX + col * (slipW + slipGapX);
+        const sy = y + row * (slipH + slipGapY);
+
+        // Dashed cut border
+        doc.setFillColor(entry.isReserve ? 254 : 255, entry.isReserve ? 249 : 255, entry.isReserve ? 235 : 255);
+        doc.setDrawColor(110, 125, 150);
+        doc.setLineWidth(0.35);
+        (doc as unknown as { setLineDashPattern: (p: number[], ph: number) => void }).setLineDashPattern([2.2, 2], 0);
+        doc.rect(sx, sy, slipW, slipH, "FD");
+        (doc as unknown as { setLineDashPattern: (p: number[], ph: number) => void }).setLineDashPattern([], 0);
+        doc.setLineWidth(0.2);
+
+        // Small Bombo tag on top-left of slip
+        doc.setFillColor(...(entry.isReserve ? GOLD : NAVY));
+        doc.rect(sx + 2.5, sy + 2.5, 26, 4.6, "F");
+        doc.setTextColor(...(entry.isReserve ? NAVY : ([245, 206, 120] as [number, number, number])));
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(6.8);
+        doc.text(
+          entry.isReserve
+            ? `B${pot.number} · SUPLENTE`
+            : `BOMBO ${pot.number}`,
+          sx + 15.5,
+          sy + 5.7,
+          { align: "center" }
+        );
+
+        // Small tournament tag on top-right
+        doc.setTextColor(...TEXT_MUTED);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.text("COPA HOSTERÍA", sx + slipW - 3, sy + 5.5, {
+          align: "right",
+        });
+
+        // Big bold player name centered in the slip
+        doc.setTextColor(...NAVY);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.text(entry.player.name.toUpperCase(), sx + slipW / 2, sy + 14, {
+          align: "center",
+        });
+      });
+
+      const totalRows = Math.ceil(entries.length / slipCols);
+      y += totalRows * (slipH + slipGapY) + 7;
+    });
+  }
+
+  // Clean footers without any URL
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(...BORDER);
+    doc.line(12, pageH - 12, pageW - 12, pageH - 12);
+    doc.setTextColor(...TEXT_MUTED);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text("Copa Hostería · 4° Edición (28.11.2026)", 12, pageH - 7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Página ${p} de ${totalPages}`, pageW - 12, pageH - 7, {
+      align: "right",
+    });
+  }
+
+  doc.save("copa-hosteria-bombos-y-papelitos-2026.pdf");
 }

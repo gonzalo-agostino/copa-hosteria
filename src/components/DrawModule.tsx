@@ -35,7 +35,10 @@ import {
   downloadSingleTeamCardPng,
   downloadTeamsPosterPng,
 } from "@/lib/export";
-import { exportTeamsSheetPdf } from "@/lib/exportPdf";
+import {
+  exportDrawCutoutSheetsPdf,
+  exportTeamsSheetPdf,
+} from "@/lib/exportPdf";
 import { formatStars } from "@/lib/utils";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Button } from "@/components/ui/button";
@@ -1018,6 +1021,16 @@ export function DrawModule({
                   <Sparkles className="h-4 w-4" />
                   Sugerir por estrellas y goles
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    exportDrawCutoutSheetsPdf(db.draw.pots, db.players)
+                  }
+                  className="shrink-0 border-[#D49B35]/55 text-[#F5CE78] hover:bg-[#D49B35]/15"
+                >
+                  <FileDown className="h-4 w-4" />
+                  Bombos y Papelitos (PDF)
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -1409,6 +1422,17 @@ export function DrawModule({
                         Reiniciar sorteo
                       </Button>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        exportDrawCutoutSheetsPdf(db.draw.pots, db.players)
+                      }
+                      className="border-[#D49B35]/50 text-[#F5CE78] hover:bg-[#D49B35]/15"
+                    >
+                      <FileDown className="h-3.5 w-3.5" />
+                      Planilla Bombos y Papelitos (PDF)
+                    </Button>
                   </div>
                 </div>
               </CardContent>
