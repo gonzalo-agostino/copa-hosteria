@@ -897,21 +897,18 @@ export async function exportDrawCutoutSheetsPdf(
       align: "center",
     });
 
-    // Subtitle (e.g. "Arqueros · 7 jugadores" or "7 jugadores")
+    // Subtitle without player count
     const isGoalkeepers = pot.name.toLowerCase().includes("arquero");
-    const subParts: string[] = [];
-    if (isGoalkeepers) subParts.push("ARQUEROS");
-    subParts.push(`${pot.playerIds.length} JUGADORES`);
-    if (pot.reservePlayerIds && pot.reservePlayerIds.length > 0) {
-      subParts.push(`+ ${pot.reservePlayerIds.length} SUPLENTE`);
-    }
+    const subLabel = isGoalkeepers
+      ? "ARQUEROS"
+      : "4° EDICIÓN · 28.11.2026";
 
     doc.setFillColor(...GOLD);
     doc.roundedRect(lx + 10, ly + 31, labelW - 20, 7.5, 1.5, 1.5, "F");
     doc.setTextColor(...NAVY);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
-    doc.text(subParts.join("  ·  "), lx + labelW / 2, ly + 36, {
+    doc.text(subLabel, lx + labelW / 2, ly + 36, {
       align: "center",
     });
   });
