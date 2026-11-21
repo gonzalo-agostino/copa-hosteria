@@ -120,6 +120,7 @@ export function DrawModule({
   const [draggedPlayer, setDraggedPlayer] = useState<{
     playerId: string;
     fromPotIndex: number;
+    isReserve?: boolean;
   } | null>(null);
 
   const playerMap = useMemo(
@@ -302,7 +303,9 @@ export function DrawModule({
         if (idx === toPotIndex) {
           return {
             ...pot,
-            playerIds: [...pot.playerIds, playerId],
+            playerIds: pot.playerIds.includes(playerId)
+              ? pot.playerIds
+              : [...pot.playerIds, playerId],
           };
         }
         return pot;
@@ -312,6 +315,144 @@ export function DrawModule({
         draw: {
           ...prev.draw,
           pots: nextPots,
+        },
+      };
+    });
+  };
+
+  const handleMoveReserveToPot = (
+    playerId: string,
+    toPotIndex: number,
+    asTitular: boolean
+  ) => {
+    onUpdateDB((prev) => {
+      const nextPots = prev.draw.pots.map((pot, idx) => {
+        const cleanedPlayerIds = pot.playerIds.filter((id) => id !== playerId);
+        const cleanedReserveIds = (pot.reservePlayerIds ?? []).filter(
+          (id) => id !== playerId
+        );
+        if (idx === toPotIndex) {
+          return asTitular
+            ? {
+                ...pot,
+                playerIds: [...cleanedPlayerIds, playerId],
+                reservePlayerIds: cleanedReserveIds,
+              }
+            : {
+                ...pot,
+                playerIds: cleanedPlayerIds,
+                reservePlayerIds: [...cleanedReserveIds, playerId],
+              };
+        }
+        return {
+          ...pot,
+          playerIds: cleanedPlayerIds,
+          reservePlayerIds: cleanedReserveIds,
+        };
+      });
+
+      const nextPlayers = prev.players.map((p) =>
+        p.id === playerId ? { ...p, convocadoActual: asTitular } : p
+      );
+
+      return {
+        ...prev,
+        players: nextPlayers,
+        draw: {
+          ...prev.draw,
+          pots: nextPots,
+        },
+      };
+    });
+  };
+
+  const handleDemotePlayerToReserve = (
+    playerId: string,
+    fromPotIndex: number
+  ) => {
+    onUpdateDB((prev) => {
+      const nextPots = prev.draw.pots.map((pot, idx) => {
+        const cleanedPlayerIds = pot.playerIds.filter((id) => id !== playerId);
+        const cleanedReserveIds = (pot.reservePlayerIds ?? []).filter(
+          (id) => id !== playerId
+        );
+        if (idx === fromPotIndex) {
+          return {
+            ...pot,
+            playerIds: cleanedPlayerIds,
+            reservePlayerIds: [...cleanedReserveIds, playerId],
+          };
+        }
+        return {
+          ...pot,
+          playerIds: cleanedPlayerIds,
+          reservePlayerIds: cleanedReserveIds,
+        };
+      });
+
+      const nextPlayers = prev.players.map((p) =>
+        p.id === playerId ? { ...p, convocadoActual: false } : p
+      );
+      const nextTeams = prev.teams.map((t) => ({
+        ...t,
+        playerIds: t.playerIds.filter((id) => id !== playerId),
+        captainId: t.captainId === playerId ? null : t.captainId,
+      }));
+      const nextDrawn = prev.draw.drawnPlayerIds.filter(
+        (id) => id !== playerId
+      );
+
+      return {
+        ...prev,
+        players: nextPlayers,
+        teams: nextTeams,
+        draw: {
+          ...prev.draw,
+          pots: nextPots,
+          drawnPlayerIds: nextDrawn,
+        },
+      };
+    });
+  };
+
+  const handleAssignReserveToTeam = (playerId: string, teamId: string) => {
+    if (!teamId) return;
+    onUpdateDB((prev) => {
+      const nextPots = prev.draw.pots.map((pot) => ({
+        ...pot,
+        reservePlayerIds: (pot.reservePlayerIds ?? []).filter(
+          (id) => id !== playerId
+        ),
+      }));
+      const nextTeams = prev.teams.map((t) =>
+        t.id === teamId
+          ? {
+              ...t,
+              playerIds: t.playerIds.includes(playerId)
+                ? t.playerIds
+                : [...t.playerIds, playerId],
+            }
+          : {
+              ...t,
+              playerIds: t.playerIds.filter((id) => id !== playerId),
+              captainId: t.captainId === playerId ? null : t.captainId,
+            }
+      );
+      const nextPlayers = prev.players.map((p) =>
+        p.id === playerId ? { ...p, convocadoActual: true } : p
+      );
+      const nextDrawn = prev.draw.drawnPlayerIds.includes(playerId)
+        ? prev.draw.drawnPlayerIds
+        : [...prev.draw.drawnPlayerIds, playerId];
+
+      return {
+        ...prev,
+        players: nextPlayers,
+        teams: nextTeams,
+        draw: {
+          ...prev.draw,
+          pots: nextPots,
+          drawnPlayerIds: nextDrawn,
         },
       };
     });
@@ -529,6 +670,16 @@ export function DrawModule({
     });
   };
 
+  const reservePlayers = useMemo(() => {
+    const ids = new Set<string>();
+    db.draw.pots.forEach((pot) => {
+      (pot.reservePlayerIds ?? []).forEach((rid) => ids.add(rid));
+    });
+    return Array.from(ids)
+      .map((id) => playerMap.get(id))
+      .filter((p): p is Player => Boolean(p));
+  }, [db.draw.pots, playerMap]);
+
   const handleSwapPlayers = () => {
     if (!swapA || !swapB || swapA === swapB) return;
     onUpdateDB((prev) => {
@@ -538,29 +689,89 @@ export function DrawModule({
         if (t.playerIds.includes(swapA)) teamAIdx = idx;
         if (t.playerIds.includes(swapB)) teamBIdx = idx;
       });
-      if (teamAIdx === -1 || teamBIdx === -1 || teamAIdx === teamBIdx) {
-        return prev;
+
+      // Case 1: Both players are in different teams
+      if (teamAIdx !== -1 && teamBIdx !== -1) {
+        if (teamAIdx === teamBIdx) return prev;
+        const nextTeams = prev.teams.map((t, idx) => {
+          if (idx === teamAIdx) {
+            return {
+              ...t,
+              playerIds: t.playerIds.map((id) => (id === swapA ? swapB : id)),
+              captainId: t.captainId === swapA ? null : t.captainId,
+            };
+          }
+          if (idx === teamBIdx) {
+            return {
+              ...t,
+              playerIds: t.playerIds.map((id) => (id === swapB ? swapA : id)),
+              captainId: t.captainId === swapB ? null : t.captainId,
+            };
+          }
+          return t;
+        });
+        return { ...prev, teams: nextTeams };
       }
 
-      const nextTeams = prev.teams.map((t, idx) => {
-        if (idx === teamAIdx) {
-          return {
-            ...t,
-            playerIds: t.playerIds.map((id) => (id === swapA ? swapB : id)),
-            captainId: t.captainId === swapA ? null : t.captainId,
-          };
-        }
-        if (idx === teamBIdx) {
-          return {
-            ...t,
-            playerIds: t.playerIds.map((id) => (id === swapB ? swapA : id)),
-            captainId: t.captainId === swapB ? null : t.captainId,
-          };
-        }
-        return t;
-      });
+      // Case 2: One player is in a team and the other is a reserve (e.g. Chicho)
+      if ((teamAIdx !== -1) !== (teamBIdx !== -1)) {
+        const teamIdx = teamAIdx !== -1 ? teamAIdx : teamBIdx;
+        const outgoingId = teamAIdx !== -1 ? swapA : swapB;
+        const incomingId = teamAIdx !== -1 ? swapB : swapA;
 
-      return { ...prev, teams: nextTeams };
+        const nextTeams = prev.teams.map((t, idx) =>
+          idx === teamIdx
+            ? {
+                ...t,
+                playerIds: t.playerIds.map((id) =>
+                  id === outgoingId ? incomingId : id
+                ),
+                captainId: t.captainId === outgoingId ? null : t.captainId,
+              }
+            : t
+        );
+
+        const nextPots = prev.draw.pots.map((pot) => {
+          const hasIncomingReserve = (pot.reservePlayerIds ?? []).includes(
+            incomingId
+          );
+          const hasOutgoingTitular = pot.playerIds.includes(outgoingId);
+          return {
+            ...pot,
+            playerIds: hasOutgoingTitular
+              ? pot.playerIds.map((id) => (id === outgoingId ? incomingId : id))
+              : pot.playerIds,
+            reservePlayerIds: hasIncomingReserve
+              ? (pot.reservePlayerIds ?? []).map((id) =>
+                  id === incomingId ? outgoingId : id
+                )
+              : pot.reservePlayerIds,
+          };
+        });
+
+        const nextPlayers = prev.players.map((p) => {
+          if (p.id === incomingId) return { ...p, convocadoActual: true };
+          if (p.id === outgoingId) return { ...p, convocadoActual: false };
+          return p;
+        });
+
+        const nextDrawn = prev.draw.drawnPlayerIds.map((id) =>
+          id === outgoingId ? incomingId : id
+        );
+
+        return {
+          ...prev,
+          players: nextPlayers,
+          teams: nextTeams,
+          draw: {
+            ...prev.draw,
+            pots: nextPots,
+            drawnPlayerIds: nextDrawn,
+          },
+        };
+      }
+
+      return prev;
     });
 
     setSwapA("");
@@ -818,11 +1029,19 @@ export function DrawModule({
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
                   if (draggedPlayer) {
-                    handleMovePlayerToPot(
-                      draggedPlayer.playerId,
-                      draggedPlayer.fromPotIndex,
-                      potIdx
-                    );
+                    if (draggedPlayer.isReserve) {
+                      handleMoveReserveToPot(
+                        draggedPlayer.playerId,
+                        potIdx,
+                        true
+                      );
+                    } else {
+                      handleMovePlayerToPot(
+                        draggedPlayer.playerId,
+                        draggedPlayer.fromPotIndex,
+                        potIdx
+                      );
+                    }
                     setDraggedPlayer(null);
                   }
                 }}
@@ -874,21 +1093,26 @@ export function DrawModule({
                           )}
                           <select
                             aria-label={`Mover ${p.name} de bombo`}
-                            value={potIdx}
-                            onChange={(e) =>
-                              handleMovePlayerToPot(
-                                pid,
-                                potIdx,
-                                Number(e.target.value)
-                              )
-                            }
+                            value={String(potIdx)}
+                            onChange={(e) => {
+                              if (e.target.value === "reserve") {
+                                handleDemotePlayerToReserve(pid, potIdx);
+                              } else {
+                                handleMovePlayerToPot(
+                                  pid,
+                                  potIdx,
+                                  Number(e.target.value)
+                                );
+                              }
+                            }}
                             className="rounded-lg border border-white/15 bg-[#0A1B42] px-1.5 py-1 text-[11px] font-semibold text-[#F0C46B] focus:outline-none focus:ring-1 focus:ring-[#D49B35]"
                           >
                             {db.draw.pots.map((targetPot, idx) => (
-                              <option key={targetPot.id} value={idx}>
+                              <option key={targetPot.id} value={String(idx)}>
                                 B{targetPot.number}
                               </option>
                             ))}
+                            <option value="reserve">Suplente</option>
                           </select>
                         </div>
                       </div>
@@ -897,7 +1121,7 @@ export function DrawModule({
                   {pot.reservePlayerIds && pot.reservePlayerIds.length > 0 && (
                     <div className="mt-2 border-t border-dashed border-[#D49B35]/30 pt-2 space-y-1.5">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-[#F0C46B]/85">
-                        Suplente / alternativa del bombo
+                        Suplente / alternativa (arrastrá o elegí destino)
                       </p>
                       {pot.reservePlayerIds.map((rid) => {
                         const rp = playerMap.get(rid);
@@ -905,14 +1129,57 @@ export function DrawModule({
                         return (
                           <div
                             key={rid}
-                            className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-[#D49B35]/40 bg-[#0A1B42]/75 px-2.5 py-2 text-xs"
+                            draggable
+                            onDragStart={() =>
+                              setDraggedPlayer({
+                                playerId: rid,
+                                fromPotIndex: potIdx,
+                                isReserve: true,
+                              })
+                            }
+                            className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-[#D49B35]/45 bg-[#0A1B42]/75 px-2.5 py-2 text-xs"
                           >
-                            <span className="truncate font-semibold text-blue-100/90">
-                              {rp.name}
-                            </span>
-                            <Badge variant="gold" className="text-[10px] shrink-0">
-                              Suplente
-                            </Badge>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <GripVertical className="h-3.5 w-3.5 shrink-0 text-[#F0C46B]/60" />
+                              <span className="truncate font-semibold text-blue-100">
+                                {rp.name}
+                              </span>
+                            </div>
+                            <select
+                              aria-label={`Mover suplente ${rp.name}`}
+                              value={`res:${potIdx}`}
+                              onChange={(e) => {
+                                const [kind, idxStr] = e.target.value.split(":");
+                                const targetIdx = Number(idxStr);
+                                handleMoveReserveToPot(
+                                  rid,
+                                  targetIdx,
+                                  kind === "tit"
+                                );
+                              }}
+                              className="rounded-lg border border-[#D49B35]/40 bg-[#0A1B42] px-1.5 py-1 text-[11px] font-semibold text-[#F0C46B] focus:outline-none focus:ring-1 focus:ring-[#D49B35]"
+                            >
+                              <optgroup label="Pasar a titular en...">
+                                {db.draw.pots.map((targetPot, idx) => (
+                                  <option
+                                    key={`tit-${targetPot.id}`}
+                                    value={`tit:${idx}`}
+                                  >
+                                    Titular B{targetPot.number}
+                                  </option>
+                                ))}
+                              </optgroup>
+                              <optgroup label="Mover suplente a...">
+                                {db.draw.pots.map((targetPot, idx) => (
+                                  <option
+                                    key={`res-${targetPot.id}`}
+                                    value={`res:${idx}`}
+                                  >
+                                    Supl. B{targetPot.number}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            </select>
                           </div>
                         );
                       })}
@@ -1238,6 +1505,52 @@ export function DrawModule({
             </div>
           )}
 
+          {/* Reserve Players Bar (Organizer can assign reserve directly to any team) */}
+          {isOrganizer && reservePlayers.length > 0 && (
+            <Card className="border-dashed border-[#D49B35]/45 bg-[#0A1B42]/80">
+              <CardContent className="flex flex-col gap-2.5 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold uppercase tracking-wider text-[#F0C46B]">
+                    Suplente disponible para cualquier equipo
+                  </p>
+                  <p className="text-[11px] text-blue-200/75">
+                    Podés asignarlo directo a un equipo o intercambiarlo por otro jugador desde &ldquo;Intercambiar&rdquo;.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {reservePlayers.map((rp) => (
+                    <div
+                      key={rp.id}
+                      className="flex items-center gap-2 rounded-xl border border-[#D49B35]/35 bg-[#10295E]/75 px-2.5 py-1.5"
+                    >
+                      <span className="text-xs font-bold text-white">
+                        {rp.name}
+                      </span>
+                      <select
+                        aria-label={`Asignar ${rp.name} a un equipo`}
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            handleAssignReserveToTeam(rp.id, e.target.value);
+                            e.target.value = "";
+                          }
+                        }}
+                        className="rounded-lg border border-[#D49B35]/45 bg-[#0A1B42] px-2 py-1 text-[11px] font-semibold text-[#F0C46B] focus:outline-none focus:ring-1 focus:ring-[#D49B35]"
+                      >
+                        <option value="">Enviar a equipo...</option>
+                        {db.teams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.playerIds.length})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Teams Grid */}
           <div
             className={`grid gap-3.5 ${
@@ -1437,6 +1750,15 @@ export function DrawModule({
                     })}
                   </optgroup>
                 ))}
+                {reservePlayers.length > 0 && (
+                  <optgroup label="Suplentes disponibles">
+                    {reservePlayers.map((rp) => (
+                      <option key={rp.id} value={rp.id}>
+                        {rp.name} (Suplente)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
 
@@ -1463,6 +1785,15 @@ export function DrawModule({
                     })}
                   </optgroup>
                 ))}
+                {reservePlayers.length > 0 && (
+                  <optgroup label="Suplentes disponibles">
+                    {reservePlayers.map((rp) => (
+                      <option key={rp.id} value={rp.id}>
+                        {rp.name} (Suplente)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
 
