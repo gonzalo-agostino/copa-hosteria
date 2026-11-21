@@ -1,4 +1,5 @@
 import { Edition, Player, PlayerPosition, Team, TournamentDB, DrawState, Pot } from "@/types/tournament";
+import { generateCopaHosteriaFixture } from "@/lib/stats";
 
 export const ORGANIZER_PIN = "1129";
 
@@ -157,7 +158,7 @@ export const SEED_PLAYERS: Player[] = [
   makePlayer(56, "De Cicco", 0, 0, true),
 ];
 
-export const OFFICIAL_DRAW_PRESET_VERSION = "2026-official-7x6-v1";
+export const OFFICIAL_DRAW_PRESET_VERSION = "2026-official-7x6-v2";
 export const OFFICIAL_DRAW_TEAM_COUNT = 7;
 export const OFFICIAL_PLAYERS_PER_TEAM = 6;
 
@@ -269,12 +270,13 @@ export function createInitialDrawState(
 
 export function createSeedDatabase(): TournamentDB {
   const teamCount = OFFICIAL_DRAW_TEAM_COUNT;
+  const teams = createInitialTeams(teamCount, OFFICIAL_PLAYERS_PER_TEAM);
   return {
     editions: SEED_EDITIONS,
     players: SEED_PLAYERS,
-    teams: createInitialTeams(teamCount, OFFICIAL_PLAYERS_PER_TEAM),
+    teams,
     draw: createInitialDrawState(SEED_PLAYERS, teamCount),
-    matches: [],
+    matches: generateCopaHosteriaFixture(teams),
     updatedAt: new Date().toISOString(),
   };
 }

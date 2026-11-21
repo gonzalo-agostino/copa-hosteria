@@ -39,6 +39,11 @@ import {
   getSuspendedPlayersForMatch,
   syncPlayoffBracket,
 } from "@/lib/stats";
+import {
+  DEFAULT_TEAMS_META,
+  OFFICIAL_DRAW_TEAM_COUNT,
+  OFFICIAL_PLAYERS_PER_TEAM,
+} from "@/lib/seed";
 import { downloadFixturePosterPng } from "@/lib/export";
 import { exportFullFixturePdf, exportMatchSheetPdf } from "@/lib/exportPdf";
 import { formatStars } from "@/lib/utils";
@@ -96,12 +101,29 @@ export function LiveMatchModule({
   );
 
   const handleGenerateFixture = () => {
-    const generated = generateCopaHosteriaFixture(db.teams);
-    if (generated.length === 0) return;
-    onUpdateDB((prev) => ({
-      ...prev,
-      matches: generated,
-    }));
+    onUpdateDB((prev) => {
+      const nextTeams: Team[] =
+        prev.teams.length >= OFFICIAL_DRAW_TEAM_COUNT
+          ? prev.teams
+          : Array.from({ length: OFFICIAL_DRAW_TEAM_COUNT }, (_, i) => {
+              const existing = prev.teams[i];
+              const preset = DEFAULT_TEAMS_META[i % DEFAULT_TEAMS_META.length];
+              return {
+                id: existing?.id ?? `team-${i + 1}`,
+                editionId: "ed-2026",
+                name: existing?.name ?? preset.name,
+                color: existing?.color ?? preset.color,
+                playerIds: existing?.playerIds ?? [],
+                captainId: existing?.captainId ?? null,
+                maxPlayers: existing?.maxPlayers ?? OFFICIAL_PLAYERS_PER_TEAM,
+              };
+            });
+      return {
+        ...prev,
+        teams: nextTeams,
+        matches: generateCopaHosteriaFixture(nextTeams),
+      };
+    });
   };
 
   const handleCreateCustomMatch = () => {
@@ -1305,11 +1327,10 @@ export function LiveMatchModule({
               <Button
                 size="lg"
                 onClick={handleGenerateFixture}
-                disabled={db.teams.length < 2}
                 className="w-full"
               >
                 <Sparkles className="h-4 w-4" />
-                Generar Fixture Oficial (F1–F7 + Semis + Final)
+                Generar Fixture
               </Button>
               <Button
                 size="lg"

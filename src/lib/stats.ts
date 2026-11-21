@@ -428,14 +428,11 @@ export function generatePlayoffDirectFinal(
 
 /**
  * Generates the official Copa Hostería 4° Edición (28.11.2026) 7-team fixture:
- * 7 group-stage matches (F1..F7, 2 per team in single table) + SEMI 1 + SEMI 2 + FINAL.
- * Falls back to round-robin if there are fewer than 7 teams.
+ * ONLY 7 group-stage matches (F1..F7, 2 per team in single table) + SEMI 1 + SEMI 2 + FINAL.
+ * Never generates a round-robin (todos contra todos).
  */
 export function generateCopaHosteriaFixture(teams: Team[]): Match[] {
-  const validTeams = teams.filter((t) => t.name.trim().length > 0);
-  if (validTeams.length < 7) {
-    return generateRoundRobinMatches(validTeams);
-  }
+  const getTeamId = (idx: number) => teams[idx]?.id ?? `team-${idx + 1}`;
 
   const now = Date.now();
   const groupSchedule: {
@@ -444,13 +441,13 @@ export function generateCopaHosteriaFixture(teams: Team[]): Match[] {
     homeIdx: number;
     awayIdx: number;
   }[] = [
-    { label: "F1", time: "15.30 HS", homeIdx: 0, awayIdx: 3 }, // Eq 1 vs Eq 4
-    { label: "F2", time: "16.00 HS", homeIdx: 1, awayIdx: 6 }, // Eq 2 vs Eq 7
-    { label: "F3", time: "16.40 HS", homeIdx: 4, awayIdx: 2 }, // Eq 5 vs Eq 3
-    { label: "F4", time: "17.20 HS", homeIdx: 5, awayIdx: 0 }, // Eq 6 vs Eq 1
-    { label: "F5", time: "18.00 HS", homeIdx: 3, awayIdx: 1 }, // Eq 4 vs Eq 2
-    { label: "F6", time: "18.40 HS", homeIdx: 6, awayIdx: 4 }, // Eq 7 vs Eq 5
-    { label: "F7", time: "19.20 HS", homeIdx: 2, awayIdx: 5 }, // Eq 3 vs Eq 6
+    { label: "F1", time: "15.30 HS", homeIdx: 0, awayIdx: 3 }, // Equipo 1 vs Equipo 4
+    { label: "F2", time: "16.00 HS", homeIdx: 1, awayIdx: 6 }, // Equipo 2 vs Equipo 7
+    { label: "F3", time: "16.40 HS", homeIdx: 4, awayIdx: 2 }, // Equipo 5 vs Equipo 3
+    { label: "F4", time: "17.20 HS", homeIdx: 5, awayIdx: 0 }, // Equipo 6 vs Equipo 1
+    { label: "F5", time: "18.00 HS", homeIdx: 3, awayIdx: 1 }, // Equipo 4 vs Equipo 2
+    { label: "F6", time: "18.40 HS", homeIdx: 6, awayIdx: 4 }, // Equipo 7 vs Equipo 5
+    { label: "F7", time: "19.20 HS", homeIdx: 2, awayIdx: 5 }, // Equipo 3 vs Equipo 6
   ];
 
   const groupMatches: Match[] = groupSchedule.map((item, idx) => ({
@@ -460,8 +457,8 @@ export function generateCopaHosteriaFixture(teams: Team[]): Match[] {
     roundLabel: item.label,
     stage: "liga",
     scheduledTime: item.time,
-    homeTeamId: validTeams[item.homeIdx].id,
-    awayTeamId: validTeams[item.awayIdx].id,
+    homeTeamId: getTeamId(item.homeIdx),
+    awayTeamId: getTeamId(item.awayIdx),
     status: "pendiente",
     events: [],
     createdAt: new Date(now + idx * 1000).toISOString(),

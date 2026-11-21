@@ -11,6 +11,7 @@ import {
   SEED_EDITIONS,
   SEED_PLAYERS,
 } from "@/lib/seed";
+import { generateCopaHosteriaFixture } from "@/lib/stats";
 import {
   getSupabaseAdmin,
   SUPABASE_STATE_ROW_ID,
@@ -61,8 +62,20 @@ function normalizeDB(db: TournamentDB): TournamentDB {
   const existingIds = new Set(db.players.map((p) => p.id));
 
   const needsOfficialDrawSync =
-    db.draw?.presetVersion !== OFFICIAL_DRAW_PRESET_VERSION &&
-    (!Array.isArray(db.matches) || db.matches.length === 0);
+    db.draw?.presetVersion !== OFFICIAL_DRAW_PRESET_VERSION;
+
+  const groupMatches = Array.isArray(db.matches)
+    ? db.matches.filter((m) => m.stage !== "playoff")
+    : [];
+  const OFFICIAL_GROUP_LABELS = ["F1", "F2", "F3", "F4", "F5", "F6", "F7"];
+  const hasOfficial7GroupMatches =
+    groupMatches.length === 7 &&
+    groupMatches.every(
+      (m, idx) =>
+        m.roundLabel === OFFICIAL_GROUP_LABELS[idx] && Boolean(m.scheduledTime)
+    );
+  const needsOfficialFixtureSync =
+    needsOfficialDrawSync || !hasOfficial7GroupMatches;
 
   let playersChanged = false;
   const syncedPlayers = db.players.map((p) => {
@@ -107,48 +120,56 @@ function normalizeDB(db: TournamentDB): TournamentDB {
   const hasLegacyColors =
     !needsOfficialDrawSync &&
     Array.isArray(db.teams) &&
-    db.teams.length === OFFICIAL_DRAW_TEAM_COUNT &&
-    db.teams.every(
-      (t, idx) =>
-        t.color.toUpperCase() === LEGACY_TEAM_COLORS[idx]?.toUpperCase()
-    );
+    (db.teams.length !== OFFICIAL_DRAW_TEAM_COUNT ||
+      db.teams.some(
+        (t, idx) =>
+          t.color.toUpperCase() === LEGACY_TEAM_COLORS[idx]?.toUpperCase()
+      ));
 
   if (
     hasAllOfficialEditions &&
     !playersChanged &&
     !needsOfficialDrawSync &&
+    !needsOfficialFixtureSync &&
     !hasLegacyColors
   ) {
     return db;
   }
 
-  const nextTeams = needsOfficialDrawSync
-    ? Array.from({ length: OFFICIAL_DRAW_TEAM_COUNT }, (_, i) => {
-        const existing = db.teams?.[i];
-        const preset = DEFAULT_TEAMS_META[i % DEFAULT_TEAMS_META.length];
-        const keepCustomName =
-          existing?.name && !LEGACY_TEAM_NAMES.has(existing.name);
-        return {
-          id: existing?.id ?? `team-${i + 1}`,
-          editionId: "ed-2026",
-          name: keepCustomName ? existing.name : preset.name,
-          color: preset.color,
-          playerIds: [],
-          captainId: null,
-          maxPlayers: OFFICIAL_PLAYERS_PER_TEAM,
-        };
-      })
-    : hasLegacyColors
-      ? db.teams.map((t, i) => {
+  const nextTeams =
+    needsOfficialDrawSync ||
+    !Array.isArray(db.teams) ||
+    db.teams.length !== OFFICIAL_DRAW_TEAM_COUNT
+      ? Array.from({ length: OFFICIAL_DRAW_TEAM_COUNT }, (_, i) => {
+          const existing = db.teams?.[i];
           const preset = DEFAULT_TEAMS_META[i % DEFAULT_TEAMS_META.length];
-          const keepCustomName = t.name && !LEGACY_TEAM_NAMES.has(t.name);
+          const keepCustomName =
+            existing?.name && !LEGACY_TEAM_NAMES.has(existing.name);
+          const keepPlayers =
+            !needsOfficialDrawSync &&
+            Array.isArray(existing?.playerIds) &&
+            db.teams?.length === OFFICIAL_DRAW_TEAM_COUNT;
           return {
-            ...t,
-            name: keepCustomName ? t.name : preset.name,
+            id: existing?.id ?? `team-${i + 1}`,
+            editionId: "ed-2026",
+            name: keepCustomName ? existing.name : preset.name,
             color: preset.color,
+            playerIds: keepPlayers ? existing.playerIds : [],
+            captainId: keepPlayers ? (existing?.captainId ?? null) : null,
+            maxPlayers: OFFICIAL_PLAYERS_PER_TEAM,
           };
         })
-      : db.teams;
+      : hasLegacyColors
+        ? db.teams.map((t, i) => {
+            const preset = DEFAULT_TEAMS_META[i % DEFAULT_TEAMS_META.length];
+            const keepCustomName = t.name && !LEGACY_TEAM_NAMES.has(t.name);
+            return {
+              ...t,
+              name: keepCustomName ? t.name : preset.name,
+              color: preset.color,
+            };
+          })
+        : db.teams;
 
   const nextDraw = needsOfficialDrawSync
     ? {
@@ -163,12 +184,17 @@ function normalizeDB(db: TournamentDB): TournamentDB {
       }
     : db.draw;
 
+  const nextMatches = needsOfficialFixtureSync
+    ? generateCopaHosteriaFixture(nextTeams)
+    : db.matches;
+
   return {
     ...db,
     editions: SEED_EDITIONS,
     players: syncedPlayers,
     teams: nextTeams,
     draw: nextDraw,
+    matches: nextMatches,
   };
 }
 
@@ -224,7 +250,18 @@ export async function readDB(): Promise<TournamentDB> {
     if (!error && data?.data) {
       const parsed = data.data as TournamentDB;
       if (Array.isArray(parsed.players) && parsed.players.length > 0) {
-        return normalizeDB(parsed);
+        const normalized = normalizeDB(parsed);
+        if (normalized !== parsed) {
+          const updatedAt = new Date().toISOString();
+          const withTimestamp = { ...normalized, updatedAt };
+          await supabase.from(SUPABASE_STATE_TABLE).upsert({
+            id: SUPABASE_STATE_ROW_ID,
+            data: withTimestamp,
+            updated_at: updatedAt,
+          });
+          return withTimestamp;
+        }
+        return normalized;
       }
     }
 
