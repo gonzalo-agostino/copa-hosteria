@@ -15,6 +15,8 @@ import {
   Trophy,
   Swords,
   Minus,
+  Dices,
+  RotateCcw,
 } from "lucide-react";
 import {
   Match,
@@ -25,12 +27,14 @@ import {
 } from "@/types/tournament";
 import {
   calculateStandings,
+  clearTournamentResults,
   generateCopaHosteriaFixture,
   generatePlayoffDirectFinal,
   generatePlayoffSemifinals,
   getMatchLoserTeamId,
   getMatchScore,
   getMatchWinnerTeamId,
+  simulateTournamentMatches,
   syncPlayoffBracket,
 } from "@/lib/stats";
 import {
@@ -117,6 +121,44 @@ export function LiveMatchModule({
         ...prev,
         teams: nextTeams,
         matches: generateCopaHosteriaFixture(nextTeams),
+      };
+    });
+  };
+
+  const handleSimulateTournament = () => {
+    onUpdateDB((prev) => {
+      const baseTeams: Team[] =
+        prev.teams.length >= OFFICIAL_DRAW_TEAM_COUNT
+          ? prev.teams
+          : Array.from({ length: OFFICIAL_DRAW_TEAM_COUNT }, (_, i) => {
+              const existing = prev.teams[i];
+              const preset = DEFAULT_TEAMS_META[i % DEFAULT_TEAMS_META.length];
+              return {
+                id: existing?.id ?? `team-${i + 1}`,
+                editionId: "ed-2026",
+                name: existing?.name ?? preset.name,
+                color: existing?.color ?? preset.color,
+                playerIds: existing?.playerIds ?? [],
+                captainId: existing?.captainId ?? null,
+                maxPlayers: existing?.maxPlayers ?? OFFICIAL_PLAYERS_PER_TEAM,
+              };
+            });
+      const simulated = simulateTournamentMatches(baseTeams, prev.matches);
+      return {
+        ...prev,
+        teams: simulated.teams,
+        matches: simulated.matches,
+      };
+    });
+  };
+
+  const handleClearResults = () => {
+    onUpdateDB((prev) => {
+      const cleared = clearTournamentResults(prev.teams, prev.matches);
+      return {
+        ...prev,
+        teams: cleared.teams,
+        matches: cleared.matches,
       };
     });
   };
@@ -1178,7 +1220,7 @@ export function LiveMatchModule({
       ) : (
         <>
           {isOrganizer && (
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               <Button
                 size="lg"
                 onClick={handleGenerateFixture}
@@ -1186,6 +1228,15 @@ export function LiveMatchModule({
               >
                 <Sparkles className="h-4 w-4" />
                 Generar Fixture
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={handleSimulateTournament}
+                className="w-full border-[#D49B35]/55 text-[#F5CE78] hover:bg-[#D49B35]/15"
+              >
+                <Dices className="h-4 w-4" />
+                Simular Torneo
               </Button>
               <Button
                 size="lg"
@@ -1471,7 +1522,16 @@ export function LiveMatchModule({
           )}
 
           {isOrganizer && db.matches.length > 0 && (
-            <div className="flex justify-end pt-1">
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-[#F5CE78] hover:bg-[#D49B35]/15"
+                onClick={handleClearResults}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Limpiar Resultados (0–0)
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"

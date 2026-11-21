@@ -1,5 +1,6 @@
 import {
   Match,
+  MatchEvent,
   Player,
   PlayerStatsRow,
   StandingRow,
@@ -626,4 +627,171 @@ export function syncPlayoffBracket(teams: Team[], matches: Match[]): Match[] {
       awayTeamId: sf2Winner ?? "",
     };
   });
+}
+
+function pickRandomGoalCount(): number {
+  const pool = [0, 0, 1, 1, 1, 2, 2, 3, 4];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function buildSimulatedGoals(
+  matchId: string,
+  team: Team | undefined,
+  teamId: string,
+  count: number,
+  baseTs: number
+): MatchEvent[] {
+  const events: MatchEvent[] = [];
+  const roster = team?.playerIds ?? [];
+  // Prefer outfield players (index >= 1) when roster has > 1, fallback to any
+  const scorerPool = roster.length > 1 ? roster.slice(1) : roster;
+
+  for (let i = 0; i < count; i++) {
+    const scorerId =
+      scorerPool.length > 0
+        ? scorerPool[Math.floor(Math.random() * scorerPool.length)]
+        : "";
+    let assistId: string | null = null;
+    if (roster.length > 1 && scorerId && Math.random() < 0.7) {
+      const candidates = roster.filter((id) => id !== scorerId);
+      if (candidates.length > 0) {
+        assistId = candidates[Math.floor(Math.random() * candidates.length)];
+      }
+    }
+    events.push({
+      id: `sim-${matchId}-${teamId}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+      matchId,
+      teamId,
+      playerId: scorerId,
+      assistPlayerId: assistId,
+      type: "gol",
+      createdAt: new Date(baseTs + i * 1000).toISOString(),
+    });
+  }
+  return events;
+}
+
+function simulateSingleMatch(
+  match: Match,
+  teamMap: Map<string, Team>,
+  withPenaltiesIfTied: boolean
+): Match {
+  const homeGoals = pickRandomGoalCount();
+  const awayGoals = pickRandomGoalCount();
+  const now = Date.now();
+
+  const homeEvents = buildSimulatedGoals(
+    match.id,
+    teamMap.get(match.homeTeamId),
+    match.homeTeamId,
+    homeGoals,
+    now
+  );
+  const awayEvents = buildSimulatedGoals(
+    match.id,
+    teamMap.get(match.awayTeamId),
+    match.awayTeamId,
+    awayGoals,
+    now + 5000
+  );
+
+  let penaltiesHome: number | null = null;
+  let penaltiesAway: number | null = null;
+  if (withPenaltiesIfTied && homeGoals === awayGoals) {
+    const winnerSide = Math.random() < 0.5 ? "home" : "away";
+    const loserPen = Math.floor(Math.random() * 4) + 1; // 1..4
+    const winnerPen = loserPen + 1;
+    penaltiesHome = winnerSide === "home" ? winnerPen : loserPen;
+    penaltiesAway = winnerSide === "away" ? winnerPen : loserPen;
+  }
+
+  return {
+    ...match,
+    status: "finalizado",
+    events: [...homeEvents, ...awayEvents],
+    penaltiesHome,
+    penaltiesAway,
+  };
+}
+
+/**
+ * Simulates an entire tournament run (F1..F7, SEMI 1, SEMI 2, FINAL) with random
+ * goals, assists, and penalties if knockout matches end tied.
+ */
+export function simulateTournamentMatches(
+  teams: Team[],
+  existingMatches: Match[]
+): { teams: Team[]; matches: Match[] } {
+  const cleanTeams = teams.map((t) => ({
+    ...t,
+    tiebreakOrder: undefined,
+  }));
+  const teamMap = new Map(cleanTeams.map((t) => [t.id, t]));
+
+  const hasOfficial7 =
+    existingMatches.filter((m) => m.stage !== "playoff").length === 7;
+  const baseMatches = hasOfficial7
+    ? existingMatches.map((m) => ({
+        ...m,
+        status: "pendiente" as const,
+        events: [],
+        penaltiesHome: null,
+        penaltiesAway: null,
+        ...(m.stage === "playoff" && (m.homePlaceholder || m.awayPlaceholder)
+          ? { homeTeamId: "", awayTeamId: "" }
+          : {}),
+      }))
+    : generateCopaHosteriaFixture(cleanTeams);
+
+  // 1. Simulate group stage (F1..F7)
+  const afterGroups = baseMatches.map((m) =>
+    m.stage === "playoff" ? m : simulateSingleMatch(m, teamMap, false)
+  );
+
+  // 2. Populate SEMI 1 (1° vs 4°) & SEMI 2 (2° vs 3°)
+  const withSemisPopulated = syncPlayoffBracket(cleanTeams, afterGroups);
+
+  // 3. Simulate SEMI 1 & SEMI 2 (with penalties if tied)
+  const afterSemis = withSemisPopulated.map((m) => {
+    if (m.stage !== "playoff") return m;
+    if (m.playoffSlot !== "sf1" && m.playoffSlot !== "sf2") return m;
+    if (!m.homeTeamId || !m.awayTeamId) return m;
+    return simulateSingleMatch(m, teamMap, true);
+  });
+
+  // 4. Populate FINAL (Ganador S1 vs Ganador S2)
+  const withFinalPopulated = syncPlayoffBracket(cleanTeams, afterSemis);
+
+  // 5. Simulate FINAL (with penalties if tied)
+  const finalMatches = withFinalPopulated.map((m) => {
+    if (m.stage !== "playoff" || m.playoffSlot !== "final") return m;
+    if (!m.homeTeamId || !m.awayTeamId) return m;
+    return simulateSingleMatch(m, teamMap, true);
+  });
+
+  return { teams: cleanTeams, matches: finalMatches };
+}
+
+export function clearTournamentResults(
+  teams: Team[],
+  matches: Match[]
+): { teams: Team[]; matches: Match[] } {
+  const cleanTeams = teams.map((t) => ({
+    ...t,
+    tiebreakOrder: undefined,
+  }));
+  const clearedMatches = matches.map((m) => ({
+    ...m,
+    status: "pendiente" as const,
+    events: [],
+    penaltiesHome: null,
+    penaltiesAway: null,
+    ...(m.stage === "playoff" && (m.homePlaceholder || m.awayPlaceholder)
+      ? { homeTeamId: "", awayTeamId: "" }
+      : {}),
+  }));
+  return {
+    teams: cleanTeams,
+    matches: syncPlayoffBracket(cleanTeams, clearedMatches),
+  };
 }
