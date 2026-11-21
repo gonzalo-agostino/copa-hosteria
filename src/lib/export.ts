@@ -1112,7 +1112,7 @@ export async function downloadFixturePosterPng(
   ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
   ctx.font = "700 20px system-ui, -apple-system, sans-serif";
   ctx.fillText(
-    "COPA HOSTERÍA  ·  4° EDICIÓN  ·  28.11.2026  ·  copa-hosteria.vercel.app",
+    "COPA HOSTERÍA  ·  4° EDICIÓN  ·  28.11.2026",
     width / 2,
     height - 54
   );

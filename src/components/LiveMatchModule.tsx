@@ -39,7 +39,11 @@ import {
   OFFICIAL_PLAYERS_PER_TEAM,
 } from "@/lib/seed";
 import { downloadFixturePosterPng } from "@/lib/export";
-import { exportFullFixturePdf, exportMatchSheetPdf } from "@/lib/exportPdf";
+import {
+  exportFullFixturePdf,
+  exportMatchSheetPdf,
+  exportTournamentRulesPdf,
+} from "@/lib/exportPdf";
 import { formatStars } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1200,7 +1204,7 @@ export function LiveMatchModule({
           )}
 
           {db.matches.length > 0 && (
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               <Button
                 size="lg"
                 variant="outline"
@@ -1208,7 +1212,7 @@ export function LiveMatchModule({
                 className="w-full border-[#D49B35]/55 text-[#F5CE78] hover:bg-[#D49B35]/15"
               >
                 <Download className="h-4 w-4" />
-                Descargar Placa Fixture (PNG)
+                Placa Fixture (PNG)
               </Button>
               <Button
                 size="lg"
@@ -1219,7 +1223,16 @@ export function LiveMatchModule({
                 className="w-full"
               >
                 <FileDown className="h-4 w-4 text-[#F0C46B]" />
-                Exportar Fixture y Planillas (PDF)
+                Fixture y Planillas (PDF)
+              </Button>
+              <Button
+                size="lg"
+                variant="secondary"
+                onClick={() => exportTournamentRulesPdf(db.teams)}
+                className="w-full"
+              >
+                <FileDown className="h-4 w-4 text-[#F0C46B]" />
+                Reglamento Oficial (PDF)
               </Button>
             </div>
           )}

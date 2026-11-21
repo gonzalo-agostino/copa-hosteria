@@ -8,9 +8,11 @@ import {
   Coins,
   ArrowUp,
   ArrowDown,
+  FileDown,
 } from "lucide-react";
 import { TournamentDB } from "@/types/tournament";
 import { SEED_EDITIONS } from "@/lib/seed";
+import { exportTournamentRulesPdf } from "@/lib/exportPdf";
 import {
   areStandingsTiedOnStats,
   calculatePlayerStats,
@@ -523,10 +525,21 @@ export function StatsModule({
               )}
 
               {/* Official Qualification & Tie-Breaker Rules */}
-              <div className="rounded-2xl border border-white/12 bg-[#071433]/70 p-3.5 text-xs space-y-1.5">
-                <p className="font-extrabold uppercase tracking-wider text-[#F5CE78]">
-                  Reglamento de Clasificación a Semifinales
-                </p>
+              <div className="rounded-2xl border border-white/12 bg-[#071433]/70 p-3.5 text-xs space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-extrabold uppercase tracking-wider text-[#F5CE78]">
+                    Reglamento de Clasificación a Semifinales
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => exportTournamentRulesPdf(db.teams)}
+                    className="border-[#D49B35]/50 text-[#F5CE78] hover:bg-[#D49B35]/15"
+                  >
+                    <FileDown className="h-3.5 w-3.5" />
+                    Descargar Reglamento (PDF)
+                  </Button>
+                </div>
                 <p className="text-blue-100/90">
                   • Clasifican los <strong>primeros 4 equipos</strong> con mayor
                   puntaje (<strong>Victoria: 3 pts</strong> ·{" "}

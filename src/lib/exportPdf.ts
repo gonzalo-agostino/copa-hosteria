@@ -504,3 +504,218 @@ export async function exportFullFixturePdf(
 
   doc.save("copa-hosteria-2026-planillas-partidos.pdf");
 }
+
+export async function exportTournamentRulesPdf(teams: Team[] = []) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const logoDataUrl = await fetchLogoDataUrl();
+  const pageW = doc.internal.pageSize.getWidth();
+
+  drawHeader(
+    doc,
+    logoDataUrl,
+    "Reglamento Oficial del Torneo",
+    "Formato de disputa, sistema de puntuación, desempates y fase final"
+  );
+
+  const teamName = (idx: number) => teams[idx]?.name ?? `Equipo ${idx + 1}`;
+
+  let y = 36;
+
+  const drawSectionHeader = (num: string, title: string) => {
+    doc.setFillColor(...NAVY);
+    doc.roundedRect(12, y, pageW - 24, 8, 1.8, 1.8, "F");
+    doc.setFillColor(...GOLD);
+    doc.roundedRect(12, y, 10, 8, 1.8, 1.8, "F");
+
+    doc.setTextColor(...NAVY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(num, 17, y + 5.5, { align: "center" });
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(title.toUpperCase(), 25, y + 5.5);
+    y += 11.5;
+  };
+
+  const drawBullet = (boldPrefix: string, rest: string) => {
+    doc.setFillColor(...GOLD);
+    doc.circle(15.5, y - 1.1, 1, "F");
+    doc.setTextColor(...TEXT_DARK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(boldPrefix, 18.5, y);
+    const prefixW = doc.getTextWidth(boldPrefix);
+    doc.setFont("helvetica", "normal");
+    const wrapped = doc.splitTextToSize(rest, pageW - 32 - prefixW);
+    doc.text(wrapped[0] ?? "", 18.5 + prefixW + 1, y);
+    if (wrapped.length > 1) {
+      for (let i = 1; i < wrapped.length; i++) {
+        y += 4.6;
+        doc.text(wrapped[i], 18.5, y);
+      }
+    }
+    y += 5.6;
+  };
+
+  // SECTION 1: FORMATO GENERAL
+  drawSectionHeader("1", "Formato General y Equipos");
+  drawBullet(
+    "Participantes:",
+    "7 equipos de 6 jugadores cada uno (42 jugadores confirmados), conformados por sorteo oficial con 6 bombos (Bombo 1 de Arqueros + Bombos B a F)."
+  );
+  drawBullet(
+    "Identificación de Equipos:",
+    `1. ${teamName(0)} (Blanco) · 2. ${teamName(1)} (Rojo) · 3. ${teamName(2)} (Amarillo) · 4. ${teamName(3)} (Verde) · 5. ${teamName(4)} (Violeta) · 6. ${teamName(5)} (Negro) · 7. ${teamName(6)} (Naranja).`
+  );
+  y += 2;
+
+  // SECTION 2: FASE DE GRUPOS Y PUNTUACIÓN
+  drawSectionHeader("2", "Fase de Grupos (Tabla Única · 7 Partidos)");
+  drawBullet(
+    "Modalidad:",
+    "Los 7 equipos compiten en una Tabla Única de posiciones. Cada equipo disputa exactamente 2 partidos en la Fase de Grupos (F1 a F7)."
+  );
+  drawBullet(
+    "Puntaje:",
+    "La victoria suma 3 puntos, el empate suma 1 punto y la derrota 0 puntos."
+  );
+
+  // Compact 7-match schedule box
+  const schedItems = [
+    ["F1", "15:30 hs", `${teamName(0)}  vs.  ${teamName(3)}`],
+    ["F2", "16:00 hs", `${teamName(1)}  vs.  ${teamName(6)}`],
+    ["F3", "16:40 hs", `${teamName(4)}  vs.  ${teamName(2)}`],
+    ["F4", "17:20 hs", `${teamName(5)}  vs.  ${teamName(0)}`],
+    ["F5", "18:00 hs", `${teamName(3)}  vs.  ${teamName(1)}`],
+    ["F6", "18:40 hs", `${teamName(6)}  vs.  ${teamName(4)}`],
+    ["F7", "19:20 hs", `${teamName(2)}  vs.  ${teamName(5)}`],
+  ];
+
+  const boxH = 7 + schedItems.length * 6;
+  doc.setFillColor(...LIGHT_BG);
+  doc.setDrawColor(...BORDER);
+  doc.roundedRect(15, y, pageW - 30, boxH, 2, 2, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...NAVY);
+  doc.text("CRONOGRAMA OFICIAL · FASE DE GRUPOS", 19, y + 5);
+
+  schedItems.forEach(([code, time, matchup], idx) => {
+    const rowY = y + 10 + idx * 6;
+    doc.setFillColor(...GOLD);
+    doc.roundedRect(19, rowY - 3.6, 12, 4.8, 1, 1, "F");
+    doc.setTextColor(...NAVY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.8);
+    doc.text(code, 25, rowY, { align: "center" });
+
+    doc.setTextColor(...TEXT_DARK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text(matchup, 36, rowY);
+
+    doc.setTextColor(...NAVY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.2);
+    doc.text(time.toUpperCase(), pageW - 20, rowY, { align: "right" });
+  });
+
+  y += boxH + 5.5;
+
+  // SECTION 3: CLASIFICACIÓN Y CRITERIOS DE DESEMPATE
+  drawSectionHeader("3", "Clasificación a Semifinales y Criterios de Desempate");
+  drawBullet(
+    "Clasificación:",
+    "Para definir los cruces de semifinales, clasificarán los primeros cuatro (4) equipos que mayores puntos tengan en la Tabla Única (la victoria suma 3 puntos y el empate 1 punto)."
+  );
+
+  doc.setTextColor(...NAVY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text(
+    "En caso de empate en puntos entre dos o más equipos, se define en el siguiente orden:",
+    15.5,
+    y
+  );
+  y += 3.5;
+
+  const tiebreakers = [
+    ["1° Criterio", "Mayor diferencia de gol (DG = Goles a favor menos Goles en contra)."],
+    ["2° Criterio", "Mayor cantidad de goles a favor (GF)."],
+    ["3° Criterio", "Menos goles en contra (GC)."],
+    ["4° Criterio", "Se tira la moneda (sorteo directo en mesa de control)."],
+  ];
+
+  const tbBoxH = 4 + tiebreakers.length * 6.5;
+  doc.setFillColor(254, 249, 235);
+  doc.setDrawColor(...GOLD);
+  doc.setLineWidth(0.45);
+  doc.roundedRect(15, y, pageW - 30, tbBoxH, 2, 2, "FD");
+  doc.setLineWidth(0.2);
+
+  tiebreakers.forEach(([stepLabel, desc], idx) => {
+    const rowY = y + 6 + idx * 6.5;
+    doc.setFillColor(...NAVY);
+    doc.roundedRect(19, rowY - 3.7, 22, 5, 1, 1, "F");
+    doc.setTextColor(245, 206, 120);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.8);
+    doc.text(stepLabel.toUpperCase(), 30, rowY, { align: "center" });
+
+    doc.setTextColor(...TEXT_DARK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.8);
+    doc.text(desc, 45, rowY);
+  });
+
+  y += tbBoxH + 6;
+
+  // SECTION 4: FASE FINAL (SEMIFINALES Y FINAL)
+  drawSectionHeader("4", "Fase Final (Semifinales y Gran Final)");
+  drawBullet(
+    "SEMI 1 (20:00 HS):",
+    "1° Zona  vs.  4° Zona  (eliminación directa a un partido)."
+  );
+  drawBullet(
+    "SEMI 2 (20:40 HS):",
+    "2° Zona  vs.  3° Zona  (eliminación directa a un partido)."
+  );
+  drawBullet(
+    "GRAN FINAL (21:30 HS):",
+    "Ganador SEMI 1  vs.  Ganador SEMI 2."
+  );
+  drawBullet(
+    "Definición en Mata-Mata:",
+    "En caso de empate en las Semifinales o en la Gran Final, el ganador se define por tanda de penales."
+  );
+  y += 2;
+
+  // SECTION 5: PLANILLA Y ESTADÍSTICAS
+  drawSectionHeader("5", "Planilla Oficial y Estadísticas");
+  drawBullet(
+    "Goles y Asistencias:",
+    "En cada partido el planillero registra todos los goles y asistencias para el ranking de la 4° Edición y el historial general de la Copa Hostería."
+  );
+  drawBullet(
+    "Sin Tarjetas:",
+    "No se registran tarjetas en planilla."
+  );
+
+  // Footer without any URL
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setDrawColor(...BORDER);
+  doc.line(12, pageH - 12, pageW - 12, pageH - 12);
+  doc.setTextColor(...TEXT_MUTED);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.text("Copa Hostería · 4° Edición (28.11.2026)", 12, pageH - 7);
+  doc.setFont("helvetica", "normal");
+  doc.text("Reglamento Oficial", pageW - 12, pageH - 7, {
+    align: "right",
+  });
+
+  doc.save("copa-hosteria-reglamento-oficial-2026.pdf");
+}
