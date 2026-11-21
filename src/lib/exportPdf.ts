@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import { Match, Player, Team } from "@/types/tournament";
-import { getMatchScore, getSuspendedPlayersForMatch } from "@/lib/stats";
+import { getMatchScore } from "@/lib/stats";
 
 const NAVY: [number, number, number] = [15, 37, 87];
 const GOLD: [number, number, number] = [212, 155, 53];
@@ -82,8 +82,7 @@ function drawTeamRosterTable(
   playerMap: Map<string, Player>,
   x: number,
   y: number,
-  w: number,
-  suspendedMap?: Map<string, string>
+  w: number
 ): number {
   const rowH = 7;
   const headerH = 8;
@@ -105,10 +104,8 @@ function drawTeamRosterTable(
 
   const colN = x + 2;
   const colName = x + 10;
-  const colG = x + w - 34;
-  const colA = x + w - 25;
-  const colTA = x + w - 16;
-  const colTR = x + w - 7;
+  const colG = x + w - 16;
+  const colA = x + w - 7;
 
   doc.setTextColor(...TEXT_DARK);
   doc.setFont("helvetica", "bold");
@@ -117,8 +114,6 @@ function drawTeamRosterTable(
   doc.text("Jugador", colName, colHeaderY + 4.2);
   doc.text("G", colG, colHeaderY + 4.2, { align: "center" });
   doc.text("A", colA, colHeaderY + 4.2, { align: "center" });
-  doc.text("TA", colTA, colHeaderY + 4.2, { align: "center" });
-  doc.text("TR", colTR, colHeaderY + 4.2, { align: "center" });
 
   let cursorY = colHeaderY + 6;
   const playersCount = Math.max(team.playerIds.length, 7);
@@ -126,7 +121,6 @@ function drawTeamRosterTable(
   for (let i = 0; i < playersCount; i++) {
     const pid = team.playerIds[i];
     const player = pid ? playerMap.get(pid) : undefined;
-    const isSuspended = pid ? suspendedMap?.has(pid) : false;
 
     if (i % 2 === 1) {
       doc.setFillColor(249, 251, 255);
@@ -138,20 +132,17 @@ function drawTeamRosterTable(
 
     // Vertical column dividers
     doc.line(x + 8.5, cursorY, x + 8.5, cursorY + rowH);
-    doc.line(x + w - 38.5, cursorY, x + w - 38.5, cursorY + rowH);
-    doc.line(x + w - 29.5, cursorY, x + w - 29.5, cursorY + rowH);
     doc.line(x + w - 20.5, cursorY, x + w - 20.5, cursorY + rowH);
     doc.line(x + w - 11.5, cursorY, x + w - 11.5, cursorY + rowH);
 
     if (player) {
       const cap = team.captainId === pid ? " (C)" : "";
       const stars = player.stars > 0 ? ` (${"*".repeat(player.stars)})` : "";
-      const suspTag = isSuspended ? " [SUSP]" : "";
-      const label = `${player.name}${cap}${stars}${suspTag}`;
-      doc.setTextColor(isSuspended ? 185 : TEXT_DARK[0], isSuspended ? 28 : TEXT_DARK[1], isSuspended ? 28 : TEXT_DARK[2]);
-      doc.setFont("helvetica", isSuspended ? "bold" : "normal");
+      const label = `${player.name}${cap}${stars}`;
+      doc.setTextColor(...TEXT_DARK);
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.text(label.slice(0, 28), colName, cursorY + 4.8);
+      doc.text(label.slice(0, 32), colName, cursorY + 4.8);
     }
 
     cursorY += rowH;
@@ -165,14 +156,12 @@ function renderSingleMatchPage(
   logoDataUrl: string | null,
   match: Match,
   teamMap: Map<string, Team>,
-  playerMap: Map<string, Player>,
-  allMatches: Match[]
+  playerMap: Map<string, Player>
 ) {
   const pageW = doc.internal.pageSize.getWidth();
   const home = teamMap.get(match.homeTeamId);
   const away = teamMap.get(match.awayTeamId);
   const score = getMatchScore(match);
-  const suspended = getSuspendedPlayersForMatch(allMatches, match);
 
   drawHeader(
     doc,
@@ -224,28 +213,7 @@ function renderSingleMatchPage(
     align: "center",
   });
 
-  let nextY = boxY + 30;
-
-  // Suspension warning if applicable
-  if (suspended.size > 0) {
-    doc.setFillColor(254, 242, 242);
-    doc.setDrawColor(220, 38, 38);
-    const lines = Array.from(suspended.entries()).map(
-      ([pid, reason]) => `• ${playerMap.get(pid)?.name ?? "Jugador"}: ${reason}`
-    );
-    const warnH = 8 + lines.length * 4.5;
-    doc.roundedRect(12, nextY, pageW - 24, warnH, 2, 2, "FD");
-    doc.setTextColor(185, 28, 28);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.text("ALERTA DE SUSPENDIDOS PARA ESTE PARTIDO:", 15, nextY + 5.5);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    lines.forEach((line, idx) => {
-      doc.text(line, 16, nextY + 10.5 + idx * 4.5);
-    });
-    nextY += warnH + 5;
-  }
+  const nextY = boxY + 30;
 
   // Two side-by-side roster tables
   const colW = (pageW - 30) / 2;
@@ -259,8 +227,7 @@ function renderSingleMatchPage(
       playerMap,
       12,
       nextY,
-      colW,
-      suspended
+      colW
     );
   }
   if (away) {
@@ -270,8 +237,7 @@ function renderSingleMatchPage(
       playerMap,
       18 + colW,
       nextY,
-      colW,
-      suspended
+      colW
     );
   }
 
@@ -282,7 +248,7 @@ function renderSingleMatchPage(
   doc.setFont("helvetica", "italic");
   doc.setFontSize(7.5);
   doc.text(
-    "Referencias: G = Goles · A = Asistencias · TA = Tarjeta Amarilla (2 TA = Expulsado + 1 fecha) · TR = Tarjeta Roja · (*) = Estrellas de campeón",
+    "Referencias: G = Goles · A = Asistencias · (C) = Capitán · (*) = Estrellas de campeón",
     12,
     notesY
   );
@@ -294,31 +260,25 @@ function renderSingleMatchPage(
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8.5);
-  doc.text("DETALLE DE GOLES, ASISTENCIAS, TARJETAS Y OBSERVACIONES", 15, notesY + 4.8);
+  doc.text("DETALLE DE GOLES, ASISTENCIAS Y OBSERVACIONES", 15, notesY + 4.8);
   notesY += 7;
 
   const notesBoxH = Math.max(40, 252 - notesY);
   doc.setDrawColor(...BORDER);
   doc.rect(12, notesY, pageW - 24, notesBoxH, "S");
 
-  if (match.events.length > 0) {
+  const goalEvents = match.events.filter((ev) => ev.type === "gol");
+  if (goalEvents.length > 0) {
     doc.setTextColor(...TEXT_DARK);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    match.events.slice(0, 12).forEach((ev, idx) => {
+    goalEvents.slice(0, 12).forEach((ev, idx) => {
       const pName = playerMap.get(ev.playerId)?.name ?? "Jugador";
       const tName = teamMap.get(ev.teamId)?.name ?? "";
       const assistName = ev.assistPlayerId
         ? playerMap.get(ev.assistPlayerId)?.name
         : null;
-      const typeLabel =
-        ev.type === "gol"
-          ? `GOL${assistName ? ` (Asist: ${assistName})` : ""}`
-          : ev.type === "roja"
-            ? "ROJA DIRECTA (EXPULSADO)"
-            : ev.isSecondYellow
-              ? "2ª AMARILLA (EXPULSADO)"
-              : "AMARILLA";
+      const typeLabel = `GOL${assistName ? ` (Asist: ${assistName})` : ""}`;
       doc.text(
         `${idx + 1}. [${tName}] ${pName} — ${typeLabel}`,
         15,
@@ -490,14 +450,15 @@ export async function exportMatchSheetPdf(
   match: Match,
   teams: Team[],
   players: Player[],
-  allMatches: Match[]
+  _allMatches?: Match[]
 ) {
+  void _allMatches;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const logoDataUrl = await fetchLogoDataUrl();
   const teamMap = new Map(teams.map((t) => [t.id, t]));
   const playerMap = new Map(players.map((p) => [p.id, p]));
 
-  renderSingleMatchPage(doc, logoDataUrl, match, teamMap, playerMap, allMatches);
+  renderSingleMatchPage(doc, logoDataUrl, match, teamMap, playerMap);
   drawFooter(doc, 1, 1);
 
   const homeSlug = (teamMap.get(match.homeTeamId)?.name ?? "local")
@@ -532,7 +493,7 @@ export async function exportFullFixturePdf(
 
   for (const match of sorted) {
     doc.addPage();
-    renderSingleMatchPage(doc, logoDataUrl, match, teamMap, playerMap, matches);
+    renderSingleMatchPage(doc, logoDataUrl, match, teamMap, playerMap);
   }
 
   const totalPages = doc.getNumberOfPages();

@@ -7,9 +7,7 @@ import {
   Play,
   Flag,
   CalendarPlus,
-  AlertTriangle,
   ChevronLeft,
-  ShieldAlert,
   Sparkles,
   Trash2,
   FileDown,
@@ -21,7 +19,6 @@ import {
 import {
   Match,
   MatchEvent,
-  MatchEventType,
   Player,
   Team,
   TournamentDB,
@@ -31,12 +28,9 @@ import {
   generateCopaHosteriaFixture,
   generatePlayoffDirectFinal,
   generatePlayoffSemifinals,
-  getExpelledPlayersInMatch,
   getMatchLoserTeamId,
   getMatchScore,
   getMatchWinnerTeamId,
-  getPlayerMatchCardState,
-  getSuspendedPlayersForMatch,
   syncPlayoffBracket,
 } from "@/lib/stats";
 import {
@@ -78,12 +72,9 @@ export function LiveMatchModule({
   const [newRoundLabel, setNewRoundLabel] = useState("Fecha 1");
 
   // Live event sheet state
-  const [eventModalType, setEventModalType] = useState<MatchEventType | null>(
-    null
-  );
+  const [goalModalOpen, setGoalModalOpen] = useState(false);
   const [eventTeamId, setEventTeamId] = useState<string>("");
   const [pendingScorerId, setPendingScorerId] = useState<string | null>(null);
-  const [suspensionAlert, setSuspensionAlert] = useState<string | null>(null);
 
   const teamMap = useMemo(
     () => new Map<string, Team>(db.teams.map((t) => [t.id, t])),
@@ -172,22 +163,18 @@ export function LiveMatchModule({
     });
   };
 
-  const openEventModal = (type: MatchEventType) => {
+  const openGoalModal = () => {
     if (!selectedMatch) return;
-    setEventModalType(type);
+    setGoalModalOpen(true);
     setEventTeamId(selectedMatch.homeTeamId);
     setPendingScorerId(null);
   };
 
-  const recordEvent = (
+  const recordGoal = (
     playerId: string,
     assistPlayerId?: string | null
   ) => {
-    if (!selectedMatch || !eventModalType || !eventTeamId) return;
-
-    const currentCardState = getPlayerMatchCardState(selectedMatch, playerId);
-    const isSecondYellow =
-      eventModalType === "amarilla" && currentCardState.yellows >= 1;
+    if (!selectedMatch || !eventTeamId) return;
 
     const newEvent: MatchEvent = {
       id: `ev-${crypto.randomUUID()}`,
@@ -195,8 +182,7 @@ export function LiveMatchModule({
       teamId: eventTeamId,
       playerId,
       assistPlayerId: assistPlayerId ?? null,
-      type: eventModalType,
-      isSecondYellow,
+      type: "gol",
       createdAt: new Date().toISOString(),
     };
 
@@ -215,18 +201,7 @@ export function LiveMatchModule({
       };
     });
 
-    const pName = playerMap.get(playerId)?.name ?? "Jugador";
-    if (isSecondYellow) {
-      setSuspensionAlert(
-        `🟥 ${pName} recibió 2ª amarilla: EXPULSADO automáticamente y SUSPENDIDO para el próximo partido.`
-      );
-    } else if (eventModalType === "roja") {
-      setSuspensionAlert(
-        `🟥 ${pName} recibió Roja directa: EXPULSADO y SUSPENDIDO para el próximo partido.`
-      );
-    }
-
-    setEventModalType(null);
+    setGoalModalOpen(false);
     setPendingScorerId(null);
   };
 
@@ -243,7 +218,6 @@ export function LiveMatchModule({
         matches: syncPlayoffBracket(prev.teams, updated),
       };
     });
-    setSuspensionAlert(null);
   };
 
   const standings = useMemo(
@@ -401,11 +375,6 @@ export function LiveMatchModule({
     const homeTeam = teamMap.get(selectedMatch.homeTeamId);
     const awayTeam = teamMap.get(selectedMatch.awayTeamId);
     const score = getMatchScore(selectedMatch);
-    const expelledMap = getExpelledPlayersInMatch(selectedMatch);
-    const suspendedBeforeMatch = getSuspendedPlayersForMatch(
-      db.matches,
-      selectedMatch
-    );
 
     const activeEventTeam = teamMap.get(eventTeamId);
     const activeEventPlayers = (activeEventTeam?.playerIds ?? [])
@@ -420,7 +389,6 @@ export function LiveMatchModule({
             size="sm"
             onClick={() => {
               setSelectedMatchId(null);
-              setSuspensionAlert(null);
             }}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -621,36 +589,6 @@ export function LiveMatchModule({
           </CardContent>
         </Card>
 
-        {/* Immediate Expulsion / Suspension Alert */}
-        {suspensionAlert && (
-          <div className="flex items-start gap-3 rounded-2xl border border-red-400/60 bg-red-950/75 p-4 text-sm font-semibold text-red-100 shadow-lg">
-            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
-            <div className="flex-1">{suspensionAlert}</div>
-          </div>
-        )}
-
-        {/* Suspended Players from Prior Match Warning */}
-        {suspendedBeforeMatch.size > 0 && (
-          <div className="rounded-2xl border border-amber-400/45 bg-amber-950/50 p-3.5 text-xs text-amber-100">
-            <div className="mb-1.5 flex items-center gap-1.5 font-bold text-amber-300">
-              <AlertTriangle className="h-4 w-4" />
-              Jugadores suspendidos para este partido:
-            </div>
-            <ul className="space-y-1 pl-5 list-disc">
-              {Array.from(suspendedBeforeMatch.entries()).map(
-                ([pid, reason]) => (
-                  <li key={pid}>
-                    <span className="font-bold">
-                      {playerMap.get(pid)?.name}
-                    </span>{" "}
-                    — {reason}
-                  </li>
-                )
-              )}
-            </ul>
-          </div>
-        )}
-
         {/* ONE-HANDED LIVE ACTION BUTTONS (Organizer) */}
         {isOrganizer && (
           <Card className="border-[#D49B35]/30">
@@ -660,35 +598,15 @@ export function LiveMatchModule({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2.5">
-              <div className="grid grid-cols-3 gap-2.5">
-                <Button
-                  size="xl"
-                  variant="success"
-                  onClick={() => openEventModal("gol")}
-                  className="flex-col gap-0.5 h-16 text-sm"
-                >
-                  <span className="text-lg">⚽</span>
-                  <span>+ Gol</span>
-                </Button>
-                <Button
-                  size="xl"
-                  variant="warning"
-                  onClick={() => openEventModal("amarilla")}
-                  className="flex-col gap-0.5 h-16 text-sm"
-                >
-                  <span className="text-lg">🟨</span>
-                  <span>+ Amarilla</span>
-                </Button>
-                <Button
-                  size="xl"
-                  variant="destructive"
-                  onClick={() => openEventModal("roja")}
-                  className="flex-col gap-0.5 h-16 text-sm"
-                >
-                  <span className="text-lg">🟥</span>
-                  <span>+ Roja</span>
-                </Button>
-              </div>
+              <Button
+                size="xl"
+                variant="success"
+                onClick={openGoalModal}
+                className="w-full h-14 text-base font-extrabold"
+              >
+                <span className="text-xl">⚽</span>
+                <span>+ Cargar Gol</span>
+              </Button>
 
               <Button
                 variant="secondary"
@@ -698,106 +616,74 @@ export function LiveMatchModule({
                 onClick={handleUndoLastEvent}
               >
                 <Undo2 className="h-4 w-4" />
-                Deshacer último evento
+                Deshacer último gol
               </Button>
             </CardContent>
           </Card>
-        )}
-
-        {/* Expelled in this match summary */}
-        {expelledMap.size > 0 && (
-          <div className="rounded-2xl border border-red-500/40 bg-red-950/45 p-3.5 text-xs text-red-100">
-            <p className="font-bold text-red-300 mb-1">
-              🟥 Expulsados en este partido (Suspendidos próximo partido):
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {Array.from(expelledMap.entries()).map(([pid, reason]) => (
-                <Badge key={pid} variant="danger">
-                  {playerMap.get(pid)?.name} · {reason}
-                </Badge>
-              ))}
-            </div>
-          </div>
         )}
 
         {/* Match Events Timeline */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center justify-between text-sm">
-              <span>Eventos del Partido</span>
-              <Badge variant="muted">{selectedMatch.events.length}</Badge>
+              <span>Goles del Partido</span>
+              <Badge variant="muted">
+                {selectedMatch.events.filter((e) => e.type === "gol").length}
+              </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {selectedMatch.events.length === 0 ? (
+            {selectedMatch.events.filter((e) => e.type === "gol").length === 0 ? (
               <p className="py-6 text-center text-xs text-blue-200/55">
-                Todavía no hay eventos cargados en este partido.
+                Todavía no hay goles cargados en este partido.
               </p>
             ) : (
-              [...selectedMatch.events].reverse().map((ev) => {
-                const player = playerMap.get(ev.playerId);
-                const assist = ev.assistPlayerId
-                  ? playerMap.get(ev.assistPlayerId)
-                  : null;
-                const team = teamMap.get(ev.teamId);
+              [...selectedMatch.events]
+                .filter((e) => e.type === "gol")
+                .reverse()
+                .map((ev) => {
+                  const player = playerMap.get(ev.playerId);
+                  const assist = ev.assistPlayerId
+                    ? playerMap.get(ev.assistPlayerId)
+                    : null;
+                  const team = teamMap.get(ev.teamId);
 
-                return (
-                  <div
-                    key={ev.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#16357A]/45 px-3 py-2.5 text-sm"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-lg">
-                        {ev.type === "gol"
-                          ? "⚽"
-                          : ev.type === "roja"
-                            ? "🟥"
-                            : ev.isSecondYellow
-                              ? "🟨🟥"
-                              : "🟨"}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate font-bold text-white">
-                          {player?.name ?? "Jugador"}{" "}
-                          {ev.isSecondYellow && (
-                            <span className="ml-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-black uppercase text-white">
-                              EXPULSADO
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-blue-200/75">
-                          {ev.type === "gol" && assist
-                            ? `Asistencia: ${assist.name}`
-                            : ev.type === "gol"
-                              ? "Gol"
-                              : ev.isSecondYellow
-                                ? "2ª Amarilla · Suspendido próx. partido"
-                                : ev.type === "roja"
-                                  ? "Roja directa · Suspendido próx. partido"
-                                  : "Tarjeta amarilla"}
-                        </p>
+                  return (
+                    <div
+                      key={ev.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#16357A]/45 px-3 py-2.5 text-sm"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-lg">⚽</span>
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-white">
+                            {player?.name ?? "Jugador"}
+                          </p>
+                          <p className="text-xs text-blue-200/75">
+                            {assist ? `Asistencia: ${assist.name}` : "Gol"}
+                          </p>
+                        </div>
                       </div>
+                      <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-blue-100">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full border border-white"
+                          style={{ backgroundColor: team?.color ?? "#fff" }}
+                        />
+                        {team?.name}
+                      </span>
                     </div>
-                    <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-blue-100">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full border border-white"
-                        style={{ backgroundColor: team?.color ?? "#fff" }}
-                      />
-                      {team?.name}
-                    </span>
-                  </div>
-                );
-              })
+                  );
+                })
             )}
           </CardContent>
         </Card>
 
-        {/* Event Recording Modal (Goal / Yellow / Red) */}
+        {/* Event Recording Modal (Goal + Optional Assist) */}
         <Dialog
-          open={eventModalType !== null}
+          open={goalModalOpen}
           onOpenChange={(open) => {
             if (!open) {
-              setEventModalType(null);
+              setGoalModalOpen(false);
               setPendingScorerId(null);
             }
           }}
@@ -805,13 +691,9 @@ export function LiveMatchModule({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {eventModalType === "gol"
-                  ? pendingScorerId
-                    ? "⚽ ¿Quién asistió el gol?"
-                    : "⚽ Cargar Gol"
-                  : eventModalType === "amarilla"
-                    ? "🟨 Cargar Tarjeta Amarilla"
-                    : "🟥 Cargar Tarjeta Roja"}
+                {pendingScorerId
+                  ? "⚽ ¿Quién asistió el gol?"
+                  : "⚽ Cargar Gol"}
               </DialogTitle>
               <DialogDescription>
                 {pendingScorerId
@@ -821,13 +703,13 @@ export function LiveMatchModule({
             </DialogHeader>
 
             {/* Step 2 for Goal: Optional Assist */}
-            {eventModalType === "gol" && pendingScorerId ? (
+            {pendingScorerId ? (
               <div className="space-y-3">
                 <Button
                   size="lg"
                   variant="default"
                   className="w-full"
-                  onClick={() => recordEvent(pendingScorerId, null)}
+                  onClick={() => recordGoal(pendingScorerId, null)}
                 >
                   Sin asistencia / Jugada individual
                 </Button>
@@ -838,7 +720,7 @@ export function LiveMatchModule({
                       <button
                         key={p.id}
                         type="button"
-                        onClick={() => recordEvent(pendingScorerId, p.id)}
+                        onClick={() => recordGoal(pendingScorerId, p.id)}
                         className="flex h-12 items-center justify-between rounded-xl border border-white/12 bg-[#16357A]/70 px-3.5 text-left text-sm font-semibold text-white transition active:scale-[0.98] hover:bg-[#1D4396]"
                       >
                         <span>
@@ -891,54 +773,23 @@ export function LiveMatchModule({
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto pr-1">
-                    {activeEventPlayers.map((p) => {
-                      const cardState = getPlayerMatchCardState(
-                        selectedMatch,
-                        p.id
-                      );
-                      const isSuspendedPrior = suspendedBeforeMatch.has(p.id);
-
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            if (eventModalType === "gol") {
-                              setPendingScorerId(p.id);
-                            } else {
-                              recordEvent(p.id, null);
-                            }
-                          }}
-                          className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-white/12 bg-[#16357A]/70 px-3.5 py-2 text-left text-sm font-semibold text-white transition active:scale-[0.98] hover:bg-[#1D4396]"
-                        >
-                          <div className="min-w-0">
-                            <span className="truncate">{p.name}</span>{" "}
-                            {p.stars > 0 && (
-                              <span className="text-[#D49B35]">
-                                {formatStars(p.stars)}
-                              </span>
-                            )}
-                            {isSuspendedPrior && (
-                              <span className="ml-1.5 rounded bg-amber-500/25 px-1.5 py-0.5 text-[10px] font-bold text-amber-200">
-                                SUSPENDIDO
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {cardState.yellows === 1 && !cardState.isExpelled && (
-                              <span className="rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-200">
-                                🟨 {eventModalType === "amarilla" ? "→ 2ª EXP" : ""}
-                              </span>
-                            )}
-                            {cardState.isExpelled && (
-                              <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-black text-white">
-                                EXP
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {activeEventPlayers.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPendingScorerId(p.id)}
+                        className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-white/12 bg-[#16357A]/70 px-3.5 py-2 text-left text-sm font-semibold text-white transition active:scale-[0.98] hover:bg-[#1D4396]"
+                      >
+                        <div className="min-w-0">
+                          <span className="truncate">{p.name}</span>{" "}
+                          {p.stars > 0 && (
+                            <span className="text-[#D49B35]">
+                              {formatStars(p.stars)}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1423,7 +1274,6 @@ export function LiveMatchModule({
                           const home = teamMap.get(match.homeTeamId);
                           const away = teamMap.get(match.awayTeamId);
                           const score = getMatchScore(match);
-                          const expelled = getExpelledPlayersInMatch(match);
                           const hasScore =
                             match.status !== "pendiente" ||
                             match.events.length > 0;
@@ -1468,14 +1318,6 @@ export function LiveMatchModule({
 
                               {/* Right: Time & Status */}
                               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                                {expelled.size > 0 && (
-                                  <span
-                                    title={`${expelled.size} expulsado(s)`}
-                                    className="hidden sm:inline text-xs"
-                                  >
-                                    🟥
-                                  </span>
-                                )}
                                 <div className="flex flex-col items-end">
                                   {match.scheduledTime && (
                                     <span className="text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78]">

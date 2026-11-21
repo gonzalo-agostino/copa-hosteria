@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Trophy, Target, HandHelping, ShieldAlert } from "lucide-react";
+import { Trophy, Target, HandHelping } from "lucide-react";
 import { TournamentDB } from "@/types/tournament";
 import { SEED_EDITIONS } from "@/lib/seed";
 import {
@@ -18,7 +18,7 @@ interface StatsModuleProps {
   db: TournamentDB;
 }
 
-type StatsTab = "posiciones" | "goleadores" | "asistidores" | "tarjetas";
+type StatsTab = "posiciones" | "goleadores" | "asistidores";
 
 export function StatsModule({ db }: StatsModuleProps) {
   const [scope, setScope] = useState<StatsScope>("all");
@@ -53,28 +53,6 @@ export function StatsModule({ db }: StatsModuleProps) {
         .filter((r) => r.assists > 0)
         .sort((a, b) => {
           if (b.assists !== a.assists) return b.assists - a.assists;
-          return a.player.name.localeCompare(b.player.name, "es");
-        }),
-    [playerStats]
-  );
-
-  const cardedPlayers = useMemo(
-    () =>
-      [...playerStats]
-        .filter(
-          (r) =>
-            r.yellowCards > 0 ||
-            r.redCards > 0 ||
-            r.expulsions > 0 ||
-            r.isSuspendedNextMatch
-        )
-        .sort((a, b) => {
-          if (Number(b.isSuspendedNextMatch) !== Number(a.isSuspendedNextMatch))
-            return Number(b.isSuspendedNextMatch) - Number(a.isSuspendedNextMatch);
-          if (b.expulsions !== a.expulsions) return b.expulsions - a.expulsions;
-          if (b.redCards !== a.redCards) return b.redCards - a.redCards;
-          if (b.yellowCards !== a.yellowCards)
-            return b.yellowCards - a.yellowCards;
           return a.player.name.localeCompare(b.player.name, "es");
         }),
     [playerStats]
@@ -182,13 +160,12 @@ export function StatsModule({ db }: StatsModuleProps) {
       )}
 
       {/* Stat Category Tabs */}
-      <div className="grid grid-cols-4 gap-1.5 rounded-2xl border border-white/14 bg-[#071433]/85 p-1.5 shadow-inner shadow-black/20">
+      <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-white/14 bg-[#071433]/85 p-1.5 shadow-inner shadow-black/20">
         {(
           [
             { id: "posiciones", label: "Posiciones", icon: Trophy },
             { id: "goleadores", label: "Goles", icon: Target },
             { id: "asistidores", label: "Asist.", icon: HandHelping },
-            { id: "tarjetas", label: "Tarjetas", icon: ShieldAlert },
           ] as const
         ).map(({ id, label, icon: Icon }) => (
           <button
@@ -207,7 +184,7 @@ export function StatsModule({ db }: StatsModuleProps) {
         ))}
       </div>
 
-      {/* Scope Filter (applies to individual player stats: Goles, Asistencias, Tarjetas) */}
+      {/* Scope Filter (applies to individual player stats: Goles, Asistencias) */}
       {activeTab !== "posiciones" && (
         <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-[#D49B35]/30 bg-[#091A42]/80 p-1.5">
           <button
@@ -501,72 +478,6 @@ export function StatsModule({ db }: StatsModuleProps) {
                   </div>
                   <div className="rounded-xl bg-[#0A1B42]/85 px-3 py-1.5 text-base font-black tabular-nums text-[#F0C46B]">
                     {row.assists}
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 4. TABLA DE TARJETAS Y EXPULSADOS */}
-      {activeTab === "tarjetas" && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between text-base">
-              <span className="flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-[#D49B35]" />
-                Tarjetas y Expulsados
-              </span>
-              <Badge variant="gold">
-                {scope === "all" ? "Histórico 2024–2026" : "Solo 2026"}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {cardedPlayers.length === 0 ? (
-              <p className="py-8 text-center text-sm text-blue-100/75">
-                Fair Play total: todavía no hay tarjetas amarillas ni rojas cargadas.
-              </p>
-            ) : (
-              cardedPlayers.map((row) => (
-                <div
-                  key={row.player.id}
-                  className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 ${
-                    row.isSuspendedNextMatch
-                      ? "border border-red-500/50 bg-red-950/45"
-                      : "bg-[#16357A]/45"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <PlayerAvatar
-                      name={row.player.name}
-                      photoUrl={row.player.photoUrl}
-                      stars={row.player.stars}
-                      size="sm"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="truncate text-sm font-bold text-white">
-                          {row.player.name}
-                        </span>
-                        {row.isSuspendedNextMatch && (
-                          <Badge variant="danger">SUSPENDIDO</Badge>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-blue-200/75">
-                        {row.suspendedReason ?? row.teamName ?? "Convocado 2026"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 text-xs font-bold">
-                    <span className="rounded-lg bg-amber-400/20 px-2 py-1 text-amber-200">
-                      🟨 {row.yellowCards}
-                    </span>
-                    <span className="rounded-lg bg-red-500/25 px-2 py-1 text-red-200">
-                      🟥 {row.expulsions}
-                    </span>
                   </div>
                 </div>
               ))
