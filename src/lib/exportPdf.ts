@@ -834,7 +834,89 @@ export async function exportDrawCutoutSheetsPdf(
     cursorY += cardH + 5;
   }
 
-  // PAGES 2+: Cut-out paper slips (2 Bombos per page, dashed cut lines)
+  const getBomboLetter = (pot: Pot, idx: number) => {
+    const letters = ["A", "B", "C", "D", "E", "F", "G", "H"];
+    return letters[idx] ?? String(pot.number);
+  };
+
+  // PAGE 2: Cut-out labels for each physical Bombo (A, B, C, D, E, F)
+  doc.addPage();
+  drawHeader(
+    doc,
+    logoDataUrl,
+    "Etiquetas Recortables para Cada Bombo (A - F)",
+    "Cortar por la línea punteada para identificar cada recipiente o bolsa del sorteo"
+  );
+
+  const labelCols = 2;
+  const labelGapX = 8;
+  const labelGapY = 8;
+  const labelW = (pageW - marginX * 2 - labelGapX) / labelCols;
+  const labelH = 44;
+  const labelStartY = 38;
+
+  pots.forEach((pot, idx) => {
+    const letter = getBomboLetter(pot, idx);
+    const col = idx % labelCols;
+    const row = Math.floor(idx / labelCols);
+    const lx = marginX + col * (labelW + labelGapX);
+    const ly = labelStartY + row * (labelH + labelGapY);
+
+    // Dashed outer cut border
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(110, 125, 150);
+    doc.setLineWidth(0.4);
+    (
+      doc as unknown as {
+        setLineDashPattern: (p: number[], ph: number) => void;
+      }
+    ).setLineDashPattern([2.5, 2], 0);
+    doc.rect(lx, ly, labelW, labelH, "FD");
+    (
+      doc as unknown as {
+        setLineDashPattern: (p: number[], ph: number) => void;
+      }
+    ).setLineDashPattern([], 0);
+    doc.setLineWidth(0.2);
+
+    // Navy top header inside cut card
+    doc.setFillColor(...NAVY);
+    doc.rect(lx + 2, ly + 2, labelW - 4, 10, "F");
+    doc.setTextColor(245, 206, 120);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text("COPA HOSTERÍA · SORTEO OFICIAL", lx + labelW / 2, ly + 8.3, {
+      align: "center",
+    });
+
+    // Big bold BOMBO A / B / C / D / E / F
+    doc.setTextColor(...NAVY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(26);
+    doc.text(`BOMBO ${letter}`, lx + labelW / 2, ly + 26, {
+      align: "center",
+    });
+
+    // Subtitle (e.g. "Arqueros · 7 jugadores" or "7 jugadores")
+    const isGoalkeepers = pot.name.toLowerCase().includes("arquero");
+    const subParts: string[] = [];
+    if (isGoalkeepers) subParts.push("ARQUEROS");
+    subParts.push(`${pot.playerIds.length} JUGADORES`);
+    if (pot.reservePlayerIds && pot.reservePlayerIds.length > 0) {
+      subParts.push(`+ ${pot.reservePlayerIds.length} SUPLENTE`);
+    }
+
+    doc.setFillColor(...GOLD);
+    doc.roundedRect(lx + 10, ly + 31, labelW - 20, 7.5, 1.5, 1.5, "F");
+    doc.setTextColor(...NAVY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text(subParts.join("  ·  "), lx + labelW / 2, ly + 36, {
+      align: "center",
+    });
+  });
+
+  // PAGES 3+: Cut-out paper slips for players (2 Bombos per page, dashed cut lines)
   const slipCols = 2;
   const slipGapX = 6;
   const slipGapY = 3.5;
@@ -853,7 +935,10 @@ export async function exportDrawCutoutSheetsPdf(
     let y = 35;
     const pagePots = pots.slice(i, i + 2);
 
-    pagePots.forEach((pot) => {
+    pagePots.forEach((pot, localIdx) => {
+      const potLetter = getBomboLetter(pot, i + localIdx);
+      const isGoalkeepers = pot.name.toLowerCase().includes("arquero");
+
       // Bombo section bar
       doc.setFillColor(...NAVY);
       doc.roundedRect(marginX, y, pageW - marginX * 2, 7.5, 1.5, 1.5, "F");
@@ -861,7 +946,7 @@ export async function exportDrawCutoutSheetsPdf(
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9.5);
       doc.text(
-        `${pot.name.toUpperCase()}  (${pot.playerIds.length} TITULARES${
+        `BOMBO ${potLetter}${isGoalkeepers ? " · ARQUEROS" : ""}  (${pot.playerIds.length} TITULARES${
           pot.reservePlayerIds && pot.reservePlayerIds.length > 0
             ? ` + ${pot.reservePlayerIds.length} SUPLENTE`
             : ""
@@ -904,8 +989,8 @@ export async function exportDrawCutoutSheetsPdf(
         doc.setFontSize(6.8);
         doc.text(
           entry.isReserve
-            ? `B${pot.number} · SUPLENTE`
-            : `BOMBO ${pot.number}`,
+            ? `BOMBO ${potLetter} · SUPL.`
+            : `BOMBO ${potLetter}`,
           sx + 15.5,
           sy + 5.7,
           { align: "center" }
