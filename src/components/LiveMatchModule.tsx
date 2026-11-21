@@ -143,7 +143,11 @@ export function LiveMatchModule({
                 maxPlayers: existing?.maxPlayers ?? OFFICIAL_PLAYERS_PER_TEAM,
               };
             });
-      const simulated = simulateTournamentMatches(baseTeams, prev.matches);
+      const simulated = simulateTournamentMatches(
+        baseTeams,
+        prev.matches,
+        prev.players
+      );
       return {
         ...prev,
         teams: simulated.teams,
@@ -900,6 +904,50 @@ export function LiveMatchModule({
     );
   };
 
+  const formatTeamScorers = (match: Match, teamId: string): string => {
+    const counts = new Map<string, number>();
+    const order: string[] = [];
+    for (const ev of match.events) {
+      if (ev.type !== "gol" || ev.teamId !== teamId || !ev.playerId) continue;
+      if (!counts.has(ev.playerId)) order.push(ev.playerId);
+      counts.set(ev.playerId, (counts.get(ev.playerId) ?? 0) + 1);
+    }
+    return order
+      .map((pid) => {
+        const name = playerMap.get(pid)?.name ?? "Jugador";
+        const c = counts.get(pid) ?? 1;
+        return c > 1 ? `${name} ×${c}` : name;
+      })
+      .join(", ");
+  };
+
+  const renderMatchScorersRow = (match: Match) => {
+    const homeScorers = formatTeamScorers(match, match.homeTeamId);
+    const awayScorers = formatTeamScorers(match, match.awayTeamId);
+    const hasPenalties =
+      match.stage === "playoff" &&
+      match.penaltiesHome != null &&
+      match.penaltiesAway != null;
+
+    if (!homeScorers && !awayScorers && !hasPenalties) return null;
+
+    return (
+      <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] items-start gap-2 border-t border-white/10 pt-1.5 text-[10px] sm:text-[11px] text-blue-100/80">
+        <div className="text-right truncate" title={homeScorers}>
+          {homeScorers ? `⚽ ${homeScorers}` : ""}
+        </div>
+        <div className="text-center font-bold text-[#F5CE78] whitespace-nowrap">
+          {hasPenalties
+            ? `(${match.penaltiesHome} - ${match.penaltiesAway} pen.)`
+            : ""}
+        </div>
+        <div className="text-left truncate" title={awayScorers}>
+          {awayScorers ? `⚽ ${awayScorers}` : ""}
+        </div>
+      </div>
+    );
+  };
+
   const renderPlayoffCard = (match: Match, highlight = false) => {
     const home = teamMap.get(match.homeTeamId);
     const away = teamMap.get(match.awayTeamId);
@@ -1346,73 +1394,76 @@ export function LiveMatchModule({
                             <div
                               key={match.id}
                               onClick={() => setSelectedMatchId(match.id)}
-                              className="group grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3 rounded-xl border border-[#D49B35]/30 bg-[#10295E]/75 px-2.5 py-2.5 sm:px-3.5 sm:py-3 cursor-pointer transition hover:border-[#F5CE78]/70 hover:bg-[#143478]/85 active:scale-[0.995]"
+                              className="group rounded-xl border border-[#D49B35]/30 bg-[#10295E]/75 px-2.5 py-2.5 sm:px-3.5 sm:py-3 cursor-pointer transition hover:border-[#F5CE78]/70 hover:bg-[#143478]/85 active:scale-[0.995]"
                             >
-                              {/* Left: Instance label */}
-                              <div className="flex items-center gap-1.5">
-                                <span className="inline-flex min-w-[46px] sm:min-w-[56px] justify-center rounded-lg bg-[#D49B35] px-2 py-1 text-[11px] sm:text-xs font-black uppercase tracking-wider text-[#071433] shadow-sm">
-                                  {match.roundLabel}
-                                </span>
-                                {match.status === "en_vivo" && (
-                                  <span
-                                    title="En vivo"
-                                    className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"
-                                  />
-                                )}
-                              </div>
-
-                              {/* Center: Team A V. Team B */}
-                              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-2.5 min-w-0">
-                                <div className="flex justify-end min-w-0">
-                                  {renderTeamColorName(home, "Local", "right")}
-                                </div>
-                                <span className="rounded-md bg-[#071433]/90 px-2 py-0.5 text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78] border border-[#D49B35]/30">
-                                  {hasScore
-                                    ? `${score.home} - ${score.away}`
-                                    : "V."}
-                                </span>
-                                <div className="flex justify-start min-w-0">
-                                  {renderTeamColorName(
-                                    away,
-                                    "Visitante",
-                                    "left"
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Right: Time & Status */}
-                              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                                <div className="flex flex-col items-end">
-                                  {match.scheduledTime && (
-                                    <span className="text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78]">
-                                      {match.scheduledTime}
-                                    </span>
-                                  )}
-                                  {match.status === "finalizado" && (
-                                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">
-                                      FINAL
-                                    </span>
-                                  )}
+                              <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3">
+                                {/* Left: Instance label */}
+                                <div className="flex items-center gap-1.5">
+                                  <span className="inline-flex min-w-[46px] sm:min-w-[56px] justify-center rounded-lg bg-[#D49B35] px-2 py-1 text-[11px] sm:text-xs font-black uppercase tracking-wider text-[#071433] shadow-sm">
+                                    {match.roundLabel}
+                                  </span>
                                   {match.status === "en_vivo" && (
-                                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-red-400">
-                                      EN VIVO
-                                    </span>
+                                    <span
+                                      title="En vivo"
+                                      className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"
+                                    />
                                   )}
                                 </div>
-                                {isOrganizer && (
-                                  <button
-                                    type="button"
-                                    aria-label="Eliminar partido"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteMatch(match.id);
-                                    }}
-                                    className="rounded-lg p-1 text-blue-200/45 hover:bg-red-500/20 hover:text-red-300"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
+
+                                {/* Center: Team A V. Team B */}
+                                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-2.5 min-w-0">
+                                  <div className="flex justify-end min-w-0">
+                                    {renderTeamColorName(home, "Local", "right")}
+                                  </div>
+                                  <span className="rounded-md bg-[#071433]/90 px-2 py-0.5 text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78] border border-[#D49B35]/30">
+                                    {hasScore
+                                      ? `${score.home} - ${score.away}`
+                                      : "V."}
+                                  </span>
+                                  <div className="flex justify-start min-w-0">
+                                    {renderTeamColorName(
+                                      away,
+                                      "Visitante",
+                                      "left"
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Right: Time & Status */}
+                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                  <div className="flex flex-col items-end">
+                                    {match.scheduledTime && (
+                                      <span className="text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78]">
+                                        {match.scheduledTime}
+                                      </span>
+                                    )}
+                                    {match.status === "finalizado" && (
+                                      <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">
+                                        FINAL
+                                      </span>
+                                    )}
+                                    {match.status === "en_vivo" && (
+                                      <span className="text-[9px] font-extrabold uppercase tracking-wider text-red-400">
+                                        EN VIVO
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isOrganizer && (
+                                    <button
+                                      type="button"
+                                      aria-label="Eliminar partido"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteMatch(match.id);
+                                      }}
+                                      className="rounded-lg p-1 text-blue-200/45 hover:bg-red-500/20 hover:text-red-300"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
+                              {renderMatchScorersRow(match)}
                             </div>
                           );
                         })
@@ -1450,7 +1501,7 @@ export function LiveMatchModule({
                             onClick={() => {
                               if (isReady) setSelectedMatchId(match.id);
                             }}
-                            className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3 rounded-xl px-2.5 py-2.5 sm:px-3.5 sm:py-3 transition ${
+                            className={`rounded-xl px-2.5 py-2.5 sm:px-3.5 sm:py-3 transition ${
                               isReady
                                 ? "cursor-pointer active:scale-[0.995]"
                                 : "opacity-90"
@@ -1460,57 +1511,60 @@ export function LiveMatchModule({
                                 : "border border-[#F5CE78]/45 bg-[#143275]/80 hover:border-[#F5CE78]/75"
                             }`}
                           >
-                            {/* Left: SEMI 1 / SEMI 2 / FINAL */}
-                            <span
-                              className={`inline-flex min-w-[64px] sm:min-w-[74px] justify-center rounded-lg px-2 py-1 text-[11px] sm:text-xs font-black uppercase tracking-wider text-[#071433] shadow-sm ${
-                                isFinal ? "bg-[#F5CE78]" : "bg-[#D49B35]"
-                              }`}
-                            >
-                              {match.roundLabel}
-                            </span>
-
-                            {/* Center: Team A V. Team B */}
-                            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-2.5 min-w-0">
-                              <div className="flex justify-end min-w-0">
-                                {renderTeamColorName(
-                                  home,
-                                  match.homePlaceholder ?? "Por definir",
-                                  "right"
-                                )}
-                              </div>
-                              <span className="rounded-md bg-[#071433]/90 px-2 py-0.5 text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78] border border-[#D49B35]/35">
-                                {hasScore
-                                  ? `${score.home} - ${score.away}`
-                                  : "V."}
+                            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3">
+                              {/* Left: SEMI 1 / SEMI 2 / FINAL */}
+                              <span
+                                className={`inline-flex min-w-[64px] sm:min-w-[74px] justify-center rounded-lg px-2 py-1 text-[11px] sm:text-xs font-black uppercase tracking-wider text-[#071433] shadow-sm ${
+                                  isFinal ? "bg-[#F5CE78]" : "bg-[#D49B35]"
+                                }`}
+                              >
+                                {match.roundLabel}
                               </span>
-                              <div className="flex justify-start min-w-0">
-                                {renderTeamColorName(
-                                  away,
-                                  match.awayPlaceholder ?? "Por definir",
-                                  "left"
-                                )}
-                              </div>
-                            </div>
 
-                            {/* Right: Time */}
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <div className="flex flex-col items-end">
-                                {match.scheduledTime && (
-                                  <span
-                                    className={`text-[11px] sm:text-xs font-black tabular-nums ${
-                                      isFinal ? "text-white" : "text-[#F5CE78]"
-                                    }`}
-                                  >
-                                    {match.scheduledTime}
-                                  </span>
-                                )}
-                                {match.status === "finalizado" && (
-                                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">
-                                    FINAL
-                                  </span>
-                                )}
+                              {/* Center: Team A V. Team B */}
+                              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-2.5 min-w-0">
+                                <div className="flex justify-end min-w-0">
+                                  {renderTeamColorName(
+                                    home,
+                                    match.homePlaceholder ?? "Por definir",
+                                    "right"
+                                  )}
+                                </div>
+                                <span className="rounded-md bg-[#071433]/90 px-2 py-0.5 text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78] border border-[#D49B35]/35">
+                                  {hasScore
+                                    ? `${score.home} - ${score.away}`
+                                    : "V."}
+                                </span>
+                                <div className="flex justify-start min-w-0">
+                                  {renderTeamColorName(
+                                    away,
+                                    match.awayPlaceholder ?? "Por definir",
+                                    "left"
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right: Time */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="flex flex-col items-end">
+                                  {match.scheduledTime && (
+                                    <span
+                                      className={`text-[11px] sm:text-xs font-black tabular-nums ${
+                                        isFinal ? "text-white" : "text-[#F5CE78]"
+                                      }`}
+                                    >
+                                      {match.scheduledTime}
+                                    </span>
+                                  )}
+                                  {match.status === "finalizado" && (
+                                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">
+                                      FINAL
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
+                            {renderMatchScorersRow(match)}
                           </div>
                         );
                       })}

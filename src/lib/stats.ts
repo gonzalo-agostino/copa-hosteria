@@ -639,10 +639,12 @@ function buildSimulatedGoals(
   team: Team | undefined,
   teamId: string,
   count: number,
-  baseTs: number
+  baseTs: number,
+  fallbackPlayerIds: string[]
 ): MatchEvent[] {
   const events: MatchEvent[] = [];
-  const roster = team?.playerIds ?? [];
+  const roster =
+    team && team.playerIds.length > 0 ? team.playerIds : fallbackPlayerIds;
   // Prefer outfield players (index >= 1) when roster has > 1, fallback to any
   const scorerPool = roster.length > 1 ? roster.slice(1) : roster;
 
@@ -674,7 +676,8 @@ function buildSimulatedGoals(
 function simulateSingleMatch(
   match: Match,
   teamMap: Map<string, Team>,
-  withPenaltiesIfTied: boolean
+  withPenaltiesIfTied: boolean,
+  fallbackPlayerIds: string[]
 ): Match {
   const homeGoals = pickRandomGoalCount();
   const awayGoals = pickRandomGoalCount();
@@ -685,14 +688,16 @@ function simulateSingleMatch(
     teamMap.get(match.homeTeamId),
     match.homeTeamId,
     homeGoals,
-    now
+    now,
+    fallbackPlayerIds
   );
   const awayEvents = buildSimulatedGoals(
     match.id,
     teamMap.get(match.awayTeamId),
     match.awayTeamId,
     awayGoals,
-    now + 5000
+    now + 5000,
+    fallbackPlayerIds
   );
 
   let penaltiesHome: number | null = null;
@@ -720,13 +725,17 @@ function simulateSingleMatch(
  */
 export function simulateTournamentMatches(
   teams: Team[],
-  existingMatches: Match[]
+  existingMatches: Match[],
+  players: Player[] = []
 ): { teams: Team[]; matches: Match[] } {
   const cleanTeams = teams.map((t) => ({
     ...t,
     tiebreakOrder: undefined,
   }));
   const teamMap = new Map(cleanTeams.map((t) => [t.id, t]));
+  const fallbackPlayerIds = players
+    .filter((p) => p.convocadoActual)
+    .map((p) => p.id);
 
   const hasOfficial7 =
     existingMatches.filter((m) => m.stage !== "playoff").length === 7;
@@ -745,7 +754,9 @@ export function simulateTournamentMatches(
 
   // 1. Simulate group stage (F1..F7)
   const afterGroups = baseMatches.map((m) =>
-    m.stage === "playoff" ? m : simulateSingleMatch(m, teamMap, false)
+    m.stage === "playoff"
+      ? m
+      : simulateSingleMatch(m, teamMap, false, fallbackPlayerIds)
   );
 
   // 2. Populate SEMI 1 (1° vs 4°) & SEMI 2 (2° vs 3°)
@@ -756,7 +767,7 @@ export function simulateTournamentMatches(
     if (m.stage !== "playoff") return m;
     if (m.playoffSlot !== "sf1" && m.playoffSlot !== "sf2") return m;
     if (!m.homeTeamId || !m.awayTeamId) return m;
-    return simulateSingleMatch(m, teamMap, true);
+    return simulateSingleMatch(m, teamMap, true, fallbackPlayerIds);
   });
 
   // 4. Populate FINAL (Ganador S1 vs Ganador S2)
@@ -766,7 +777,7 @@ export function simulateTournamentMatches(
   const finalMatches = withFinalPopulated.map((m) => {
     if (m.stage !== "playoff" || m.playoffSlot !== "final") return m;
     if (!m.homeTeamId || !m.awayTeamId) return m;
-    return simulateSingleMatch(m, teamMap, true);
+    return simulateSingleMatch(m, teamMap, true, fallbackPlayerIds);
   });
 
   return { teams: cleanTeams, matches: finalMatches };
