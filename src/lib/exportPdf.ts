@@ -731,116 +731,14 @@ export async function exportDrawCutoutSheetsPdf(
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const playerMap = new Map(players.map((p) => [p.id, p]));
-
-  // PAGE 1: Master summary of all Bombos for the draw table
-  drawHeader(
-    doc,
-    logoDataUrl,
-    "Planilla de Bombos · Sorteo Físico",
-    "Hoja de referencia de Bombos y lista completa para mesa de control"
-  );
-
-  const cols = 2;
-  const gapX = 6;
   const marginX = 12;
-  const cardW = (pageW - marginX * 2 - gapX) / cols;
-  let cursorY = 35;
-
-  for (let i = 0; i < pots.length; i += cols) {
-    const pair = pots.slice(i, i + cols);
-    const maxRows = Math.max(
-      ...pair.map(
-        (pot) =>
-          pot.playerIds.length +
-          (pot.reservePlayerIds && pot.reservePlayerIds.length > 0
-            ? pot.reservePlayerIds.length + 1
-            : 0)
-      ),
-      7
-    );
-    const rowH = 6.2;
-    const cardH = 8 + maxRows * rowH + 3;
-
-    if (cursorY + cardH > pageH - 18) {
-      doc.addPage();
-      drawHeader(
-        doc,
-        logoDataUrl,
-        "Planilla de Bombos · Sorteo Físico",
-        "Continuación de Bombos"
-      );
-      cursorY = 35;
-    }
-
-    pair.forEach((pot, colIdx) => {
-      const cx = marginX + colIdx * (cardW + gapX);
-
-      // Card border
-      doc.setDrawColor(...BORDER);
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(cx, cursorY, cardW, cardH, 2, 2, "FD");
-
-      // Header bar
-      doc.setFillColor(...NAVY);
-      doc.roundedRect(cx, cursorY, cardW, 7.5, 2, 2, "F");
-      doc.rect(cx, cursorY + 4, cardW, 3.5, "F");
-
-      doc.setTextColor(245, 206, 120);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.text(pot.name.toUpperCase(), cx + 3.5, cursorY + 5.2);
-
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(8);
-      doc.text(`${pot.playerIds.length} tit.`, cx + cardW - 3.5, cursorY + 5.2, {
-        align: "right",
-      });
-
-      let ry = cursorY + 12.2;
-      pot.playerIds.forEach((pid, pIdx) => {
-        const p = playerMap.get(pid);
-        if (!p) return;
-        const stars = p.stars > 0 ? ` (${"*".repeat(p.stars)})` : "";
-        doc.setTextColor(...TEXT_DARK);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8.5);
-        doc.text(`${pIdx + 1}.`, cx + 3.5, ry);
-        doc.setFont("helvetica", "normal");
-        doc.text(`${p.name}${stars}`, cx + 9, ry);
-        ry += rowH;
-      });
-
-      if (pot.reservePlayerIds && pot.reservePlayerIds.length > 0) {
-        doc.setDrawColor(...GOLD);
-        doc.line(cx + 3, ry - 3, cx + cardW - 3, ry - 3);
-        doc.setTextColor(160, 108, 12);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(7.5);
-        doc.text("SUPLENTE / ALTERNATIVA:", cx + 3.5, ry + 1);
-        ry += rowH;
-
-        pot.reservePlayerIds.forEach((rid) => {
-          const rp = playerMap.get(rid);
-          if (!rp) return;
-          doc.setTextColor(...TEXT_DARK);
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(8.5);
-          doc.text(`• ${rp.name}`, cx + 4.5, ry);
-          ry += rowH;
-        });
-      }
-    });
-
-    cursorY += cardH + 5;
-  }
 
   const getBomboLetter = (pot: Pot, idx: number) => {
     const letters = ["A", "B", "C", "D", "E", "F", "G", "H"];
     return letters[idx] ?? String(pot.number);
   };
 
-  // PAGE 2: Cut-out labels for each physical Bombo (A, B, C, D, E, F)
-  doc.addPage();
+  // PAGE 1: Cut-out labels for each physical Bombo (A, B, C, D, E, F)
   drawHeader(
     doc,
     logoDataUrl,
