@@ -118,7 +118,10 @@ export function DrawModule({
 }: DrawModuleProps) {
   const [step, setStep] = useState<DrawStep>("bolillero");
   const [manualSearch, setManualSearch] = useState("");
-  const [manualFilter, setManualFilter] = useState<string>("all");
+  const [draggedManualPlayerId, setDraggedManualPlayerId] = useState<
+    string | null
+  >(null);
+  const [dragOverTeamId, setDragOverTeamId] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
   const [copied, setCopied] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
@@ -920,218 +923,329 @@ export function DrawModule({
         </div>
       )}
 
-      {/* STEP: ARMADO MANUAL DE EQUIPOS (Organizer only) */}
+      {/* STEP: ARMADO MANUAL DE EQUIPOS (Formato Bombos: Drag & Drop + Selector) */}
       {isOrganizer && step === "manual" && (() => {
-        const teamIdByPlayer = new Map<string, string>();
+        const assignedSet = new Set<string>();
         for (const t of db.teams) {
           for (const pid of t.playerIds) {
-            teamIdByPlayer.set(pid, t.id);
+            assignedSet.add(pid);
           }
         }
+
         const activePlayers = db.players
           .filter((p) => p.convocadoActual)
           .sort((a, b) => a.name.localeCompare(b.name, "es"));
-        const assignedCount = activePlayers.filter((p) =>
-          teamIdByPlayer.has(p.id)
-        ).length;
-        const unassignedCount = activePlayers.length - assignedCount;
 
         const q = manualSearch.trim().toLowerCase();
-        const visiblePlayers = activePlayers.filter((p) => {
-          const assignedTeamId = teamIdByPlayer.get(p.id) ?? "";
-          if (manualFilter === "unassigned" && assignedTeamId !== "") return false;
-          if (
-            manualFilter !== "all" &&
-            manualFilter !== "unassigned" &&
-            assignedTeamId !== manualFilter
-          ) {
-            return false;
-          }
-          if (q) {
-            const matchName = p.name.toLowerCase().includes(q);
-            const matchPos = (p.position ?? "").toLowerCase().includes(q);
-            if (!matchName && !matchPos) return false;
-          }
-          return true;
-        });
+        const matchesQuery = (p: Player) => {
+          if (!q) return true;
+          return (
+            p.name.toLowerCase().includes(q) ||
+            (p.position ?? "").toLowerCase().includes(q)
+          );
+        };
+
+        const unassignedPlayers = activePlayers.filter(
+          (p) => !assignedSet.has(p.id) && matchesQuery(p)
+        );
+        const totalUnassigned = activePlayers.filter(
+          (p) => !assignedSet.has(p.id)
+        ).length;
+        const assignedCount = activePlayers.length - totalUnassigned;
 
         return (
           <div className="space-y-4">
+            {/* Top summary & controls */}
             <Card className="border-[#D49B35]/35">
-              <CardHeader className="pb-2.5">
-                <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-                  <span className="flex items-center gap-2">
-                    <UserCheck className="h-4 w-4 text-[#F5CE78]" />
-                    Armado Manual de Equipos
-                  </span>
-                  <Badge variant="gold">
-                    {assignedCount} / {activePlayers.length} asignados
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-blue-100/80">
-                  Asigná directamente cada jugador al equipo que quieras sin usar el bolillero (o fijá algunos jugadores y sorteá el resto en <strong>Bolillero</strong>).
-                </p>
-
-                {/* Team capacity pills (also work as quick filters) */}
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setManualFilter("all")}
-                    className={`rounded-xl border px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
-                      manualFilter === "all"
-                        ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
-                        : "border-white/15 bg-[#0A1B42]/70 text-blue-100 hover:text-white"
-                    }`}
-                  >
-                    Todos ({activePlayers.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setManualFilter("unassigned")}
-                    className={`rounded-xl border px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
-                      manualFilter === "unassigned"
-                        ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
-                        : "border-white/15 bg-[#0A1B42]/70 text-blue-100 hover:text-white"
-                    }`}
-                  >
-                    Sin equipo ({unassignedCount})
-                  </button>
-                  {db.teams.map((t) => {
-                    const cap = getTeamCapacity(
-                      t,
-                      db.teams.length,
-                      activePlayersCount
-                    );
-                    const isActiveFilter = manualFilter === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setManualFilter(t.id)}
-                        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
-                          isActiveFilter
-                            ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
-                            : "border-white/15 bg-[#0A1B42]/70 text-blue-100 hover:text-white"
-                        }`}
-                      >
-                        <span
-                          className="h-2.5 w-2.5 rounded-full border border-white"
-                          style={{ backgroundColor: t.color }}
-                        />
-                        <span>{t.name}</span>
-                        <span className="opacity-80">
-                          {t.playerIds.length}/{cap}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Search + Quick Actions */}
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200/55" />
-                    <Input
-                      value={manualSearch}
-                      onChange={(e) => setManualSearch(e.target.value)}
-                      placeholder="Buscar jugador por nombre o posición..."
-                      className="pl-10"
-                    />
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-bold text-white">
+                      Armado Manual de Equipos
+                    </h3>
+                    <Badge variant="gold">
+                      {assignedCount} / {activePlayers.length} asignados
+                    </Badge>
                   </div>
-                  <div className="flex gap-2">
+                  <p className="mt-0.5 text-xs text-blue-200/75">
+                    Arrastrá jugadores directo a la tarjeta de cada equipo (o usá el selector rápido en celular).
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => setStep("bolillero")}
+                  >
+                    Ver Equipos / Exportar
+                  </Button>
+                  {assignedCount > 0 && (
                     <Button
                       size="sm"
-                      variant="default"
-                      onClick={() => setStep("bolillero")}
+                      variant="ghost"
+                      onClick={handleResetDraw}
                     >
-                      Ver Equipos / Exportar
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Vaciar
                     </Button>
-                    {assignedCount > 0 && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={handleResetDraw}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        Vaciar
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Manual assignment player list */}
-            <div className="grid gap-2 sm:grid-cols-2">
-              {visiblePlayers.map((p) => {
-                const currentTeamId = teamIdByPlayer.get(p.id) ?? "";
-                const currentTeam = currentTeamId
-                  ? db.teams.find((t) => t.id === currentTeamId)
-                  : null;
-                return (
-                  <Card
-                    key={p.id}
-                    className={
-                      currentTeam
-                        ? "border-[#D49B35]/35 bg-[#10295E]/75"
-                        : "border-white/10"
-                    }
-                  >
-                    <CardContent className="flex items-center justify-between gap-2.5 p-3">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <PlayerAvatar
-                          name={p.name}
-                          photoUrl={p.photoUrl}
-                          stars={p.stars}
-                          size="sm"
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-white">
-                            {p.name}{" "}
-                            {p.stars > 0 && (
-                              <span className="text-[#F5CE78]">
-                                {formatStars(p.stars)}
-                              </span>
-                            )}
-                          </p>
-                          <p className="truncate text-[11px] text-blue-200/75">
-                            {p.position ? p.position : "Convocado 2026"}
-                          </p>
-                        </div>
-                      </div>
+            {/* Quick search */}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200/55" />
+              <Input
+                value={manualSearch}
+                onChange={(e) => setManualSearch(e.target.value)}
+                placeholder="Filtrar jugador por nombre o posición..."
+                className="pl-10"
+              />
+            </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {currentTeam && (
-                          <span
-                            className="h-3.5 w-3.5 shrink-0 rounded-full border border-white"
-                            style={{ backgroundColor: currentTeam.color }}
+            {/* Unassigned Pool (Drop zone to remove from a team) */}
+            <Card
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverTeamId("__unassigned__");
+              }}
+              onDragLeave={() => setDragOverTeamId(null)}
+              onDrop={() => {
+                if (draggedManualPlayerId) {
+                  handleManualAssignPlayer(draggedManualPlayerId, "");
+                  setDraggedManualPlayerId(null);
+                  setDragOverTeamId(null);
+                }
+              }}
+              className={`transition-all ${
+                dragOverTeamId === "__unassigned__"
+                  ? "border-[#F5CE78] ring-2 ring-[#D49B35]/50 bg-[#D49B35]/10"
+                  : "border-white/15"
+              }`}
+            >
+              <CardHeader className="pb-2.5">
+                <CardTitle className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 text-[#F0C46B]">
+                    <Users className="h-4 w-4" />
+                    Sin equipo asignado
+                  </span>
+                  <Badge variant="muted">{totalUnassigned} jug.</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {unassignedPlayers.length === 0 ? (
+                  <p className="py-2 text-center text-xs text-blue-200/60">
+                    {totalUnassigned === 0
+                      ? "¡Todos los convocados ya tienen equipo! Arrastrá un jugador acá si querés sacarlo de su equipo."
+                      : "Ningún jugador sin equipo coincide con la búsqueda."}
+                  </p>
+                ) : (
+                  <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                    {unassignedPlayers.map((p) => (
+                      <div
+                        key={p.id}
+                        draggable
+                        onDragStart={() => setDraggedManualPlayerId(p.id)}
+                        onDragEnd={() => {
+                          setDraggedManualPlayerId(null);
+                          setDragOverTeamId(null);
+                        }}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#16357A]/55 px-2.5 py-2 text-xs cursor-grab active:cursor-grabbing hover:border-[#D49B35]/50"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <GripVertical className="h-3.5 w-3.5 shrink-0 text-blue-200/45" />
+                          <PlayerAvatar
+                            name={p.name}
+                            photoUrl={p.photoUrl}
+                            stars={p.stars}
+                            size="xs"
                           />
-                        )}
+                          <span className="truncate font-semibold text-white">
+                            {p.name}
+                          </span>
+                          {p.stars > 0 && (
+                            <span className="shrink-0 text-[#D49B35]">
+                              {formatStars(p.stars)}
+                            </span>
+                          )}
+                        </div>
                         <select
-                          aria-label={`Asignar equipo para ${p.name}`}
-                          value={currentTeamId}
+                          aria-label={`Asignar ${p.name} a un equipo`}
+                          value=""
                           onChange={(e) =>
                             handleManualAssignPlayer(p.id, e.target.value)
                           }
-                          className="h-9 max-w-[150px] rounded-xl border border-white/18 bg-[#0A1B42] px-2.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#D49B35]"
+                          className="rounded-lg border border-white/15 bg-[#0A1B42] px-1.5 py-1 text-[11px] font-semibold text-[#F0C46B] focus:outline-none focus:ring-1 focus:ring-[#D49B35]"
                         >
-                          <option value="">Sin equipo</option>
-                          {db.teams.map((t) => {
-                            const cap = getTeamCapacity(
-                              t,
-                              db.teams.length,
-                              activePlayersCount
-                            );
-                            return (
-                              <option key={t.id} value={t.id}>
-                                {t.name} ({t.playerIds.length}/{cap})
-                              </option>
-                            );
-                          })}
+                          <option value="">→ Eq.</option>
+                          {db.teams.map((t, idx) => (
+                            <option key={t.id} value={t.id}>
+                              E{idx + 1} · {t.name}
+                            </option>
+                          ))}
                         </select>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Teams Board (Same grid & drag-and-drop card layout as Bombos) */}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {db.teams.map((team, teamIdx) => {
+                const cap = getTeamCapacity(
+                  team,
+                  db.teams.length,
+                  activePlayersCount
+                );
+                const isOver = dragOverTeamId === team.id;
+                const teamPlayers = team.playerIds
+                  .map((pid) => playerMap.get(pid))
+                  .filter((p): p is Player => Boolean(p) && matchesQuery(p));
+
+                return (
+                  <Card
+                    key={team.id}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOverTeamId(team.id);
+                    }}
+                    onDragLeave={() => setDragOverTeamId(null)}
+                    onDrop={() => {
+                      if (draggedManualPlayerId) {
+                        handleManualAssignPlayer(draggedManualPlayerId, team.id);
+                        setDraggedManualPlayerId(null);
+                        setDragOverTeamId(null);
+                      }
+                    }}
+                    className={`overflow-hidden transition-all ${
+                      isOver
+                        ? "border-[#F5CE78] ring-2 ring-[#D49B35]/55 bg-[#D49B35]/10"
+                        : "border-[#D49B35]/25"
+                    }`}
+                  >
+                    <div
+                      className="h-1.5 w-full"
+                      style={{ backgroundColor: team.color }}
+                    />
+                    <CardHeader className="pb-2.5">
+                      <CardTitle className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2 min-w-0 text-[#F0C46B]">
+                          <span
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white text-[11px] font-extrabold text-white shadow-sm"
+                            style={{ backgroundColor: team.color }}
+                          >
+                            {teamIdx + 1}
+                          </span>
+                          <span className="truncate text-white font-bold">
+                            {team.name}
+                          </span>
+                        </span>
+                        <Badge
+                          variant={
+                            team.playerIds.length > cap
+                              ? "danger"
+                              : team.playerIds.length === cap
+                                ? "gold"
+                                : "muted"
+                          }
+                        >
+                          {team.playerIds.length} / {cap}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-1.5 min-h-[120px]">
+                      {teamPlayers.length === 0 ? (
+                        <div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-3 text-center text-xs text-blue-200/55">
+                          Arrastrá jugadores acá
+                        </div>
+                      ) : (
+                        teamPlayers.map((p) => {
+                          const isCaptain = team.captainId === p.id;
+                          return (
+                            <div
+                              key={p.id}
+                              draggable
+                              onDragStart={() => setDraggedManualPlayerId(p.id)}
+                              onDragEnd={() => {
+                                setDraggedManualPlayerId(null);
+                                setDragOverTeamId(null);
+                              }}
+                              className={`flex items-center justify-between gap-1.5 rounded-xl border px-2.5 py-2 text-xs cursor-grab active:cursor-grabbing ${
+                                isCaptain
+                                  ? "border-[#D49B35]/60 bg-[#D49B35]/15"
+                                  : "border-white/10 bg-[#16357A]/55 hover:border-[#D49B35]/45"
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <GripVertical className="h-3.5 w-3.5 shrink-0 text-blue-200/40" />
+                                <PlayerAvatar
+                                  name={p.name}
+                                  photoUrl={p.photoUrl}
+                                  stars={p.stars}
+                                  size="xs"
+                                />
+                                <span className="truncate font-semibold text-white">
+                                  {p.name}
+                                </span>
+                                {isCaptain && (
+                                  <span className="shrink-0 rounded bg-[#D49B35] px-1 py-0.2 text-[9px] font-black text-[#071433]">
+                                    C
+                                  </span>
+                                )}
+                                {p.stars > 0 && (
+                                  <span className="shrink-0 text-[#D49B35]">
+                                    {formatStars(p.stars)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  title={
+                                    isCaptain
+                                      ? "Quitar cinta de capitán"
+                                      : "Designar capitán"
+                                  }
+                                  onClick={() =>
+                                    handleToggleCaptain(team.id, p.id)
+                                  }
+                                  className={`flex h-6 w-6 items-center justify-center rounded-md border text-[10px] font-black transition cursor-pointer ${
+                                    isCaptain
+                                      ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
+                                      : "border-white/15 bg-white/5 text-blue-200/70 hover:text-[#F5CE78]"
+                                  }`}
+                                >
+                                  C
+                                </button>
+                                <select
+                                  aria-label={`Mover ${p.name} de equipo`}
+                                  value={team.id}
+                                  onChange={(e) =>
+                                    handleManualAssignPlayer(
+                                      p.id,
+                                      e.target.value
+                                    )
+                                  }
+                                  className="rounded-lg border border-white/15 bg-[#0A1B42] px-1.5 py-1 text-[11px] font-semibold text-[#F0C46B] focus:outline-none focus:ring-1 focus:ring-[#D49B35]"
+                                >
+                                  <option value="">Sin</option>
+                                  {db.teams.map((targetTeam, idx) => (
+                                    <option
+                                      key={targetTeam.id}
+                                      value={targetTeam.id}
+                                    >
+                                      E{idx + 1}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </CardContent>
                   </Card>
                 );
