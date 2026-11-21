@@ -1103,7 +1103,8 @@ export function DrawModule({
                 const isOver = dragOverTeamId === team.id;
                 const teamPlayers = team.playerIds
                   .map((pid) => playerMap.get(pid))
-                  .filter((p): p is Player => Boolean(p) && matchesQuery(p));
+                  .filter((p): p is Player => p !== undefined)
+                  .filter(matchesQuery);
 
                 return (
                   <Card
