@@ -18,6 +18,8 @@ import {
   Undo2,
   Plus,
   Minus,
+  UserCheck,
+  Search,
 } from "lucide-react";
 import { Player, Team, TournamentDB } from "@/types/tournament";
 import {
@@ -60,7 +62,7 @@ interface DrawModuleProps {
   onRequestOrganizer: () => void;
 }
 
-type DrawStep = "bolillero" | "bombos" | "equipos";
+type DrawStep = "bolillero" | "manual" | "bombos" | "equipos";
 
 function shuffleArray<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -115,6 +117,8 @@ export function DrawModule({
   onRequestOrganizer,
 }: DrawModuleProps) {
   const [step, setStep] = useState<DrawStep>("bolillero");
+  const [manualSearch, setManualSearch] = useState("");
+  const [manualFilter, setManualFilter] = useState<string>("all");
   const [isSpinning, setIsSpinning] = useState(false);
   const [copied, setCopied] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
@@ -472,6 +476,58 @@ export function DrawModule({
     }));
   };
 
+  const handleManualAssignPlayer = (playerId: string, targetTeamId: string) => {
+    onUpdateDB((prev) => {
+      const nextTeams = prev.teams.map((t) => {
+        const filtered = t.playerIds.filter((pid) => pid !== playerId);
+        const nextCaptain =
+          t.captainId === playerId && t.id !== targetTeamId
+            ? null
+            : t.captainId;
+        if (t.id === targetTeamId) {
+          return {
+            ...t,
+            playerIds: [...filtered, playerId],
+            captainId: nextCaptain,
+          };
+        }
+        return {
+          ...t,
+          playerIds: filtered,
+          captainId: nextCaptain,
+        };
+      });
+
+      const isAssigned = Boolean(targetTeamId);
+      const alreadyInDrawn = prev.draw.drawnPlayerIds.includes(playerId);
+      let nextDrawn = prev.draw.drawnPlayerIds;
+      if (isAssigned && !alreadyInDrawn) {
+        nextDrawn = [...prev.draw.drawnPlayerIds, playerId];
+      } else if (!isAssigned && alreadyInDrawn) {
+        nextDrawn = prev.draw.drawnPlayerIds.filter((id) => id !== playerId);
+      }
+
+      const drawnSet = new Set(nextDrawn);
+      const allActiveIds = prev.players
+        .filter((p) => p.convocadoActual)
+        .map((p) => p.id);
+      const nextPotIdx = prev.draw.pots.findIndex((pot) =>
+        pot.playerIds.some((pid) => !drawnSet.has(pid))
+      );
+
+      return {
+        ...prev,
+        teams: nextTeams,
+        draw: {
+          ...prev.draw,
+          drawnPlayerIds: nextDrawn,
+          currentPotIndex: nextPotIdx >= 0 ? nextPotIdx : 0,
+          isComplete: nextDrawn.length >= allActiveIds.length,
+        },
+      };
+    });
+  };
+
   const handleUndoLastBall = () => {
     if (isSpinning || db.draw.drawnPlayerIds.length === 0) return;
     onUpdateDB((prev) => {
@@ -812,11 +868,11 @@ export function DrawModule({
     <div className="space-y-4">
       {/* Sub-navigation for Organizer */}
       {isOrganizer && (
-        <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-[#0A1B42]/75 p-1.5">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 rounded-2xl border border-white/10 bg-[#0A1B42]/75 p-1.5">
           <button
             type="button"
             onClick={() => setStep("bolillero")}
-            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
               step === "bolillero"
                 ? "bg-[#D49B35] text-[#0A1B42] shadow"
                 : "text-blue-200/80 hover:text-white"
@@ -827,8 +883,20 @@ export function DrawModule({
           </button>
           <button
             type="button"
+            onClick={() => setStep("manual")}
+            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
+              step === "manual"
+                ? "bg-[#D49B35] text-[#0A1B42] shadow"
+                : "text-blue-200/80 hover:text-white"
+            }`}
+          >
+            <UserCheck className="h-4 w-4" />
+            Manual
+          </button>
+          <button
+            type="button"
             onClick={() => setStep("bombos")}
-            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
               step === "bombos"
                 ? "bg-[#D49B35] text-[#0A1B42] shadow"
                 : "text-blue-200/80 hover:text-white"
@@ -840,7 +908,7 @@ export function DrawModule({
           <button
             type="button"
             onClick={() => setStep("equipos")}
-            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-bold transition ${
+            className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
               step === "equipos"
                 ? "bg-[#D49B35] text-[#0A1B42] shadow"
                 : "text-blue-200/80 hover:text-white"
@@ -851,6 +919,227 @@ export function DrawModule({
           </button>
         </div>
       )}
+
+      {/* STEP: ARMADO MANUAL DE EQUIPOS (Organizer only) */}
+      {isOrganizer && step === "manual" && (() => {
+        const teamIdByPlayer = new Map<string, string>();
+        for (const t of db.teams) {
+          for (const pid of t.playerIds) {
+            teamIdByPlayer.set(pid, t.id);
+          }
+        }
+        const activePlayers = db.players
+          .filter((p) => p.convocadoActual)
+          .sort((a, b) => a.name.localeCompare(b.name, "es"));
+        const assignedCount = activePlayers.filter((p) =>
+          teamIdByPlayer.has(p.id)
+        ).length;
+        const unassignedCount = activePlayers.length - assignedCount;
+
+        const q = manualSearch.trim().toLowerCase();
+        const visiblePlayers = activePlayers.filter((p) => {
+          const assignedTeamId = teamIdByPlayer.get(p.id) ?? "";
+          if (manualFilter === "unassigned" && assignedTeamId !== "") return false;
+          if (
+            manualFilter !== "all" &&
+            manualFilter !== "unassigned" &&
+            assignedTeamId !== manualFilter
+          ) {
+            return false;
+          }
+          if (q) {
+            const matchName = p.name.toLowerCase().includes(q);
+            const matchPos = (p.position ?? "").toLowerCase().includes(q);
+            if (!matchName && !matchPos) return false;
+          }
+          return true;
+        });
+
+        return (
+          <div className="space-y-4">
+            <Card className="border-[#D49B35]/35">
+              <CardHeader className="pb-2.5">
+                <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+                  <span className="flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-[#F5CE78]" />
+                    Armado Manual de Equipos
+                  </span>
+                  <Badge variant="gold">
+                    {assignedCount} / {activePlayers.length} asignados
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-blue-100/80">
+                  Asigná directamente cada jugador al equipo que quieras sin usar el bolillero (o fijá algunos jugadores y sorteá el resto en <strong>Bolillero</strong>).
+                </p>
+
+                {/* Team capacity pills (also work as quick filters) */}
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setManualFilter("all")}
+                    className={`rounded-xl border px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
+                      manualFilter === "all"
+                        ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
+                        : "border-white/15 bg-[#0A1B42]/70 text-blue-100 hover:text-white"
+                    }`}
+                  >
+                    Todos ({activePlayers.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setManualFilter("unassigned")}
+                    className={`rounded-xl border px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
+                      manualFilter === "unassigned"
+                        ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
+                        : "border-white/15 bg-[#0A1B42]/70 text-blue-100 hover:text-white"
+                    }`}
+                  >
+                    Sin equipo ({unassignedCount})
+                  </button>
+                  {db.teams.map((t) => {
+                    const cap = getTeamCapacity(
+                      t,
+                      db.teams.length,
+                      activePlayersCount
+                    );
+                    const isActiveFilter = manualFilter === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setManualFilter(t.id)}
+                        className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-bold transition cursor-pointer ${
+                          isActiveFilter
+                            ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
+                            : "border-white/15 bg-[#0A1B42]/70 text-blue-100 hover:text-white"
+                        }`}
+                      >
+                        <span
+                          className="h-2.5 w-2.5 rounded-full border border-white"
+                          style={{ backgroundColor: t.color }}
+                        />
+                        <span>{t.name}</span>
+                        <span className="opacity-80">
+                          {t.playerIds.length}/{cap}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Search + Quick Actions */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-200/55" />
+                    <Input
+                      value={manualSearch}
+                      onChange={(e) => setManualSearch(e.target.value)}
+                      placeholder="Buscar jugador por nombre o posición..."
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => setStep("bolillero")}
+                    >
+                      Ver Equipos / Exportar
+                    </Button>
+                    {assignedCount > 0 && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleResetDraw}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Vaciar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Manual assignment player list */}
+            <div className="grid gap-2 sm:grid-cols-2">
+              {visiblePlayers.map((p) => {
+                const currentTeamId = teamIdByPlayer.get(p.id) ?? "";
+                const currentTeam = currentTeamId
+                  ? db.teams.find((t) => t.id === currentTeamId)
+                  : null;
+                return (
+                  <Card
+                    key={p.id}
+                    className={
+                      currentTeam
+                        ? "border-[#D49B35]/35 bg-[#10295E]/75"
+                        : "border-white/10"
+                    }
+                  >
+                    <CardContent className="flex items-center justify-between gap-2.5 p-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <PlayerAvatar
+                          name={p.name}
+                          photoUrl={p.photoUrl}
+                          stars={p.stars}
+                          size="sm"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-white">
+                            {p.name}{" "}
+                            {p.stars > 0 && (
+                              <span className="text-[#F5CE78]">
+                                {formatStars(p.stars)}
+                              </span>
+                            )}
+                          </p>
+                          <p className="truncate text-[11px] text-blue-200/75">
+                            {p.position ? p.position : "Convocado 2026"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {currentTeam && (
+                          <span
+                            className="h-3.5 w-3.5 shrink-0 rounded-full border border-white"
+                            style={{ backgroundColor: currentTeam.color }}
+                          />
+                        )}
+                        <select
+                          aria-label={`Asignar equipo para ${p.name}`}
+                          value={currentTeamId}
+                          onChange={(e) =>
+                            handleManualAssignPlayer(p.id, e.target.value)
+                          }
+                          className="h-9 max-w-[150px] rounded-xl border border-white/18 bg-[#0A1B42] px-2.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#D49B35]"
+                        >
+                          <option value="">Sin equipo</option>
+                          {db.teams.map((t) => {
+                            const cap = getTeamCapacity(
+                              t,
+                              db.teams.length,
+                              activePlayersCount
+                            );
+                            return (
+                              <option key={t.id} value={t.id}>
+                                {t.name} ({t.playerIds.length}/{cap})
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* STEP: EQUIPOS & CONFIG (Organizer only) */}
       {isOrganizer && step === "equipos" && (
