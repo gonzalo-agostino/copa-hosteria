@@ -1,7 +1,16 @@
 import fs from "fs";
 import path from "path";
 import { TournamentDB } from "@/types/tournament";
-import { createSeedDatabase, SEED_EDITIONS, SEED_PLAYERS } from "@/lib/seed";
+import {
+  buildOfficialDrawPots,
+  createSeedDatabase,
+  DEFAULT_TEAMS_META,
+  OFFICIAL_DRAW_PRESET_VERSION,
+  OFFICIAL_DRAW_TEAM_COUNT,
+  OFFICIAL_PLAYERS_PER_TEAM,
+  SEED_EDITIONS,
+  SEED_PLAYERS,
+} from "@/lib/seed";
 import {
   getSupabaseAdmin,
   SUPABASE_STATE_ROW_ID,
@@ -30,6 +39,10 @@ function normalizeDB(db: TournamentDB): TournamentDB {
   const seedPlayerMap = new Map(SEED_PLAYERS.map((p) => [p.id, p]));
   const existingIds = new Set(db.players.map((p) => p.id));
 
+  const needsOfficialDrawSync =
+    db.draw?.presetVersion !== OFFICIAL_DRAW_PRESET_VERSION &&
+    (!Array.isArray(db.matches) || db.matches.length === 0);
+
   let playersChanged = false;
   const syncedPlayers = db.players.map((p) => {
     const seed = seedPlayerMap.get(p.id);
@@ -40,8 +53,15 @@ function normalizeDB(db: TournamentDB): TournamentDB {
       p.goals2024 !== seed.goals2024;
     const needsPositionSync = !p.position && Boolean(seed.position);
     const needsStarsSync = p.id === "p-51" && p.stars === 0 && seed.stars > 0;
+    const needsConvocadoSync =
+      needsOfficialDrawSync && p.convocadoActual !== seed.convocadoActual;
 
-    if (!needsGoalsSync && !needsPositionSync && !needsStarsSync) {
+    if (
+      !needsGoalsSync &&
+      !needsPositionSync &&
+      !needsStarsSync &&
+      !needsConvocadoSync
+    ) {
       return p;
     }
     playersChanged = true;
@@ -52,6 +72,7 @@ function normalizeDB(db: TournamentDB): TournamentDB {
       goals2024: seed.goals2024,
       ...(needsPositionSync ? { position: seed.position } : {}),
       ...(needsStarsSync ? { stars: seed.stars } : {}),
+      ...(needsConvocadoSync ? { convocadoActual: seed.convocadoActual } : {}),
     };
   });
 
@@ -62,11 +83,45 @@ function normalizeDB(db: TournamentDB): TournamentDB {
     }
   }
 
-  if (hasAllOfficialEditions && !playersChanged) return db;
+  if (hasAllOfficialEditions && !playersChanged && !needsOfficialDrawSync) {
+    return db;
+  }
+
+  const nextTeams = needsOfficialDrawSync
+    ? Array.from({ length: OFFICIAL_DRAW_TEAM_COUNT }, (_, i) => {
+        const existing = db.teams?.[i];
+        const preset = DEFAULT_TEAMS_META[i % DEFAULT_TEAMS_META.length];
+        return {
+          id: existing?.id ?? `team-${i + 1}`,
+          editionId: "ed-2026",
+          name: existing?.name ?? preset.name,
+          color: existing?.color ?? preset.color,
+          playerIds: [],
+          captainId: null,
+          maxPlayers: OFFICIAL_PLAYERS_PER_TEAM,
+        };
+      })
+    : db.teams;
+
+  const nextDraw = needsOfficialDrawSync
+    ? {
+        teamCount: OFFICIAL_DRAW_TEAM_COUNT,
+        pots: buildOfficialDrawPots(),
+        drawnPlayerIds: [],
+        currentPotIndex: 0,
+        potTeamOrders: {},
+        isComplete: false,
+        presetVersion: OFFICIAL_DRAW_PRESET_VERSION,
+        lastDrawn: null,
+      }
+    : db.draw;
+
   return {
     ...db,
     editions: SEED_EDITIONS,
     players: syncedPlayers,
+    teams: nextTeams,
+    draw: nextDraw,
   };
 }
 

@@ -51,6 +51,7 @@ export interface Pot {
   number: number; // 1..7
   name: string;
   playerIds: string[];
+  reservePlayerIds?: string[];
 }
 
 export interface MatchEvent {
@@ -93,6 +94,7 @@ export interface DrawState {
   // For each pot, a shuffled order of team indices [0..teamCount-1] so each team gets 1 player per pot
   potTeamOrders: Record<number, number[]>;
   isComplete: boolean;
+  presetVersion?: string;
   lastDrawn?: {
     playerId: string;
     teamId: string;

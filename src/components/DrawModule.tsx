@@ -21,8 +21,12 @@ import {
 } from "lucide-react";
 import { Player, Team, TournamentDB } from "@/types/tournament";
 import {
+  buildOfficialDrawPots,
   buildSuggestedPots,
   DEFAULT_TEAMS_META,
+  OFFICIAL_DRAW_PRESET_VERSION,
+  OFFICIAL_DRAW_TEAM_COUNT,
+  OFFICIAL_PLAYERS_PER_TEAM,
   TEAM_COLOR_PRESETS,
 } from "@/lib/seed";
 import {
@@ -231,6 +235,54 @@ export function DrawModule({
         lastDrawn: null,
       },
     }));
+  };
+
+  const handleLoadOfficialPots = () => {
+    onUpdateDB((prev) => {
+      const nextTeams: Team[] = Array.from(
+        { length: OFFICIAL_DRAW_TEAM_COUNT },
+        (_, i) => {
+          const existing = prev.teams[i];
+          const preset = DEFAULT_TEAMS_META[i % DEFAULT_TEAMS_META.length];
+          return {
+            id: existing?.id ?? `team-${i + 1}`,
+            editionId: "ed-2026",
+            name: existing?.name ?? preset.name,
+            color: existing?.color ?? preset.color,
+            playerIds: [],
+            captainId: null,
+            maxPlayers: OFFICIAL_PLAYERS_PER_TEAM,
+          };
+        }
+      );
+
+      const officialPots = buildOfficialDrawPots();
+      const officialActiveIds = new Set(
+        officialPots.flatMap((pot) => pot.playerIds)
+      );
+      const nextPlayers = prev.players.map((p) => {
+        if (officialActiveIds.has(p.id)) {
+          return p.convocadoActual ? p : { ...p, convocadoActual: true };
+        }
+        return p.convocadoActual ? { ...p, convocadoActual: false } : p;
+      });
+
+      return {
+        ...prev,
+        players: nextPlayers,
+        teams: nextTeams,
+        draw: {
+          teamCount: OFFICIAL_DRAW_TEAM_COUNT,
+          pots: officialPots,
+          drawnPlayerIds: [],
+          currentPotIndex: 0,
+          potTeamOrders: {},
+          isComplete: false,
+          presetVersion: OFFICIAL_DRAW_PRESET_VERSION,
+          lastDrawn: null,
+        },
+      };
+    });
   };
 
   const handleMovePlayerToPot = (
@@ -742,10 +794,20 @@ export function DrawModule({
                   Ordená por estrellas y goles 2025 o mové jugadores manualmente (arrastrá o usá el selector).
                 </p>
               </div>
-              <Button onClick={handleSuggestPots} className="shrink-0">
-                <Sparkles className="h-4 w-4" />
-                Sugerir bombos por estrellas y goles
-              </Button>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <Button onClick={handleLoadOfficialPots} className="shrink-0">
+                  <Dices className="h-4 w-4" />
+                  Cargar bombos oficiales (7×6)
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleSuggestPots}
+                  className="shrink-0"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Sugerir por estrellas y goles
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -832,6 +894,30 @@ export function DrawModule({
                       </div>
                     );
                   })}
+                  {pot.reservePlayerIds && pot.reservePlayerIds.length > 0 && (
+                    <div className="mt-2 border-t border-dashed border-[#D49B35]/30 pt-2 space-y-1.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#F0C46B]/85">
+                        Suplente / alternativa del bombo
+                      </p>
+                      {pot.reservePlayerIds.map((rid) => {
+                        const rp = playerMap.get(rid);
+                        if (!rp) return null;
+                        return (
+                          <div
+                            key={rid}
+                            className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-[#D49B35]/40 bg-[#0A1B42]/75 px-2.5 py-2 text-xs"
+                          >
+                            <span className="truncate font-semibold text-blue-100/90">
+                              {rp.name}
+                            </span>
+                            <Badge variant="gold" className="text-[10px] shrink-0">
+                              Suplente
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
