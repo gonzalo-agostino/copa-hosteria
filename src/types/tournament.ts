@@ -77,8 +77,11 @@ export interface Match {
   roundLabel: string;
   stage?: MatchStage;
   playoffSlot?: PlayoffSlot;
+  scheduledTime?: string;
   homeTeamId: string;
   awayTeamId: string;
+  homePlaceholder?: string;
+  awayPlaceholder?: string;
   status: MatchStatus;
   events: MatchEvent[];
   penaltiesHome?: number | null;

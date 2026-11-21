@@ -3,27 +3,27 @@ import { Edition, Player, PlayerPosition, Team, TournamentDB, DrawState, Pot } f
 export const ORGANIZER_PIN = "1129";
 
 export const TEAM_COLOR_PRESETS = [
+  { name: "Blanco", hex: "#FFFFFF" },
+  { name: "Rojo", hex: "#EF4444" },
+  { name: "Amarillo", hex: "#FACC15" },
+  { name: "Verde", hex: "#22C55E" },
+  { name: "Violeta", hex: "#A855F7" },
+  { name: "Negro", hex: "#111827" },
+  { name: "Naranja", hex: "#F97316" },
   { name: "Azul Francia", hex: "#2563EB" },
-  { name: "Dorado", hex: "#D49B35" },
-  { name: "Rojo", hex: "#DC2626" },
-  { name: "Verde Esmeralda", hex: "#16A34A" },
-  { name: "Blanco", hex: "#F8FAFC" },
-  { name: "Negro", hex: "#1E293B" },
   { name: "Celeste", hex: "#0EA5E9" },
-  { name: "Violeta", hex: "#7C3AED" },
-  { name: "Naranja", hex: "#EA580C" },
   { name: "Bordó", hex: "#9F1239" },
 ];
 
 export const DEFAULT_TEAMS_META = [
-  { name: "Equipo Azul", color: "#2563EB" },
-  { name: "Equipo Dorado", color: "#D49B35" },
-  { name: "Equipo Rojo", color: "#DC2626" },
-  { name: "Equipo Verde", color: "#16A34A" },
-  { name: "Equipo Blanco", color: "#F8FAFC" },
-  { name: "Equipo Celeste", color: "#0EA5E9" },
-  { name: "Equipo Violeta", color: "#7C3AED" },
-  { name: "Equipo Naranja", color: "#EA580C" },
+  { name: "Equipo 1", color: "#FFFFFF" },
+  { name: "Equipo 2", color: "#EF4444" },
+  { name: "Equipo 3", color: "#FACC15" },
+  { name: "Equipo 4", color: "#22C55E" },
+  { name: "Equipo 5", color: "#A855F7" },
+  { name: "Equipo 6", color: "#111827" },
+  { name: "Equipo 7", color: "#F97316" },
+  { name: "Equipo 8", color: "#0EA5E9" },
 ];
 
 export const SEED_EDITIONS: Edition[] = [

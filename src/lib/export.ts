@@ -1,4 +1,5 @@
-import { Player, Team } from "@/types/tournament";
+import { Match, Player, Team } from "@/types/tournament";
+import { getMatchScore } from "@/lib/stats";
 
 export function buildWhatsAppTeamsText(teams: Team[], players: Player[]): string {
   const playerMap = new Map(players.map((p) => [p.id, p]));
@@ -828,6 +829,296 @@ export async function downloadSingleTeamCardPng(
     .replace(/(^-|-$)/g, "");
   const link = document.createElement("a");
   link.download = `copa-hosteria-equipo-${slug}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+function isVeryDarkHex(hex: string): boolean {
+  const clean = hex.replace("#", "").trim();
+  if (clean.length !== 6) return false;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum < 45;
+}
+
+/**
+ * Exports the official Copa Hostería Fixture Poster (PNG, 1080px wide)
+ * with blue, white & gold styling ready to share on WhatsApp.
+ */
+export async function downloadFixturePosterPng(
+  teams: Team[],
+  matches: Match[]
+) {
+  const teamMap = new Map(teams.map((t) => [t.id, t]));
+  const logoImg = await loadLogoImage("/logo-copa-hosteria.jpg");
+
+  const groupMatches = [...matches]
+    .filter((m) => m.stage !== "playoff")
+    .sort((a, b) => a.round - b.round || a.createdAt.localeCompare(b.createdAt));
+
+  const playoffMatches = [...matches]
+    .filter((m) => m.stage === "playoff")
+    .sort((a, b) => a.round - b.round || a.createdAt.localeCompare(b.createdAt));
+
+  const width = 1080;
+  const headerH = 290;
+  const sectionHeaderH = 58;
+  const rowH = 74;
+  const rowGap = 14;
+  const sectionGap = 36;
+  const footerH = 96;
+
+  const groupBlockH =
+    groupMatches.length > 0
+      ? sectionHeaderH + groupMatches.length * (rowH + rowGap)
+      : 0;
+  const playoffBlockH =
+    playoffMatches.length > 0
+      ? sectionGap + sectionHeaderH + playoffMatches.length * (rowH + rowGap)
+      : 0;
+
+  const height = Math.max(
+    900,
+    headerH + groupBlockH + playoffBlockH + footerH + 36
+  );
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  // Royal Navy background gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+  bgGrad.addColorStop(0, "#0F2557");
+  bgGrad.addColorStop(0.5, "#0A1B42");
+  bgGrad.addColorStop(1, "#06112B");
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Subtle top radial gold glow
+  const glow = ctx.createRadialGradient(
+    width / 2,
+    130,
+    20,
+    width / 2,
+    130,
+    460
+  );
+  glow.addColorStop(0, "rgba(212, 155, 53, 0.24)");
+  glow.addColorStop(1, "rgba(212, 155, 53, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, 540);
+
+  // Outer double gold frame
+  ctx.strokeStyle = "rgba(212, 155, 53, 0.55)";
+  ctx.lineWidth = 4;
+  drawRoundedRect(ctx, 26, 26, width - 52, height - 52, 30);
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(245, 206, 120, 0.22)";
+  ctx.lineWidth = 1.5;
+  drawRoundedRect(ctx, 38, 38, width - 76, height - 76, 22);
+  ctx.stroke();
+
+  // Official Logo Crest
+  if (logoImg) {
+    const logoSize = 112;
+    const lx = (width - logoSize) / 2;
+    const ly = 52;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(lx + logoSize / 2, ly + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(logoImg, lx, ly, logoSize, logoSize);
+    ctx.restore();
+
+    ctx.strokeStyle = "#F5CE78";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(lx + logoSize / 2, ly + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Header Title
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = "900 44px system-ui, -apple-system, sans-serif";
+  ctx.fillText("COPA HOSTERÍA · FIXTURE OFICIAL", width / 2, 218);
+
+  ctx.fillStyle = "#F5CE78";
+  ctx.font = "800 22px system-ui, -apple-system, sans-serif";
+  ctx.fillText("4° EDICIÓN  ·  28.11.2026  ·  FASE DE GRUPOS Y FINALES", width / 2, 254);
+
+  // Gold divider line
+  ctx.strokeStyle = "rgba(212, 155, 53, 0.55)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(80, 276);
+  ctx.lineTo(width - 80, 276);
+  ctx.stroke();
+
+  const padX = 64;
+  const rowW = width - padX * 2;
+  let cursorY = headerH + 8;
+
+  const drawTeamLabel = (
+    name: string,
+    color: string | null,
+    x: number,
+    y: number,
+    align: "right" | "left"
+  ) => {
+    const text = name.toUpperCase();
+    ctx.font = "900 26px system-ui, -apple-system, sans-serif";
+    const textW = ctx.measureText(text).width;
+    const isDark = color ? isVeryDarkHex(color) : false;
+
+    if (isDark) {
+      // Draw crisp black pill with white border so Negro stands out cleanly
+      const pillPadX = 14;
+      const pillH = 40;
+      const pillW = textW + pillPadX * 2;
+      const px = align === "right" ? x - pillW : x;
+      const py = y - 28;
+      ctx.fillStyle = "#111827";
+      drawRoundedRect(ctx, px, py, pillW, pillH, 10);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.75)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "#FFFFFF";
+      ctx.textAlign = "center";
+      ctx.fillText(text, px + pillW / 2, y);
+    } else {
+      ctx.fillStyle = color ?? "#CBD5E1";
+      ctx.textAlign = align;
+      ctx.fillText(text, x, y);
+    }
+  };
+
+  const drawMatchRow = (match: Match, y: number) => {
+    const home = teamMap.get(match.homeTeamId);
+    const away = teamMap.get(match.awayTeamId);
+    const isFinal = match.playoffSlot === "final";
+    const isPlayoff = match.stage === "playoff";
+    const score = getMatchScore(match);
+    const hasScore =
+      match.status !== "pendiente" || match.events.length > 0;
+
+    // Row card
+    ctx.fillStyle = isFinal
+      ? "rgba(212, 155, 53, 0.22)"
+      : isPlayoff
+        ? "rgba(20, 50, 117, 0.85)"
+        : "rgba(15, 37, 87, 0.78)";
+    drawRoundedRect(ctx, padX, y, rowW, rowH, 18);
+    ctx.fill();
+
+    ctx.strokeStyle = isFinal
+      ? "#F5CE78"
+      : isPlayoff
+        ? "rgba(245, 206, 120, 0.55)"
+        : "rgba(212, 155, 53, 0.35)";
+    ctx.lineWidth = isFinal ? 3 : 1.75;
+    ctx.stroke();
+
+    // Left: Instance badge (F1..F7, SEMI 1, SEMI 2, FINAL)
+    const badgeW = 132;
+    const badgeH = 44;
+    const bx = padX + 16;
+    const by = y + (rowH - badgeH) / 2;
+    ctx.fillStyle = isFinal ? "#F5CE78" : "#D49B35";
+    drawRoundedRect(ctx, bx, by, badgeW, badgeH, 12);
+    ctx.fill();
+
+    ctx.fillStyle = "#071433";
+    ctx.font = "900 22px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(match.roundLabel.toUpperCase(), bx + badgeW / 2, y + 45);
+
+    // Center: Home V. Away (or Score)
+    const centerX = padX + 160 + (rowW - 320) / 2;
+    const homeLabel = home?.name ?? match.homePlaceholder ?? "Por definir";
+    const awayLabel = away?.name ?? match.awayPlaceholder ?? "Por definir";
+
+    const midText = hasScore ? `${score.home} - ${score.away}` : "V.";
+    ctx.fillStyle = "#F5CE78";
+    ctx.font = hasScore
+      ? "900 26px system-ui, -apple-system, sans-serif"
+      : "900 22px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(midText, centerX, y + 46);
+
+    const midOffset = hasScore ? 56 : 30;
+    drawTeamLabel(
+      homeLabel,
+      home?.color ?? null,
+      centerX - midOffset,
+      y + 46,
+      "right"
+    );
+    drawTeamLabel(
+      awayLabel,
+      away?.color ?? null,
+      centerX + midOffset,
+      y + 46,
+      "left"
+    );
+
+    // Right: Scheduled Time (15.30 HS)
+    if (match.scheduledTime) {
+      ctx.fillStyle = isFinal ? "#FFFFFF" : "#F5CE78";
+      ctx.font = "800 22px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(match.scheduledTime.toUpperCase(), padX + rowW - 22, y + 45);
+    }
+  };
+
+  // Section 1: Fase de Grupos
+  if (groupMatches.length > 0) {
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#F5CE78";
+    ctx.font = "900 22px system-ui, -apple-system, sans-serif";
+    ctx.fillText("FASE DE GRUPOS  ·  TABLA ÚNICA (2 PARTIDOS POR EQUIPO)", padX + 8, cursorY + 34);
+    cursorY += sectionHeaderH;
+
+    for (const m of groupMatches) {
+      drawMatchRow(m, cursorY);
+      cursorY += rowH + rowGap;
+    }
+  }
+
+  // Section 2: Fase Final
+  if (playoffMatches.length > 0) {
+    cursorY += sectionGap;
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#F5CE78";
+    ctx.font = "900 22px system-ui, -apple-system, sans-serif";
+    ctx.fillText("FASE FINAL  ·  SEMIFINALES Y GRAN FINAL", padX + 8, cursorY + 34);
+    cursorY += sectionHeaderH;
+
+    for (const m of playoffMatches) {
+      drawMatchRow(m, cursorY);
+      cursorY += rowH + rowGap;
+    }
+  }
+
+  // Footer
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
+  ctx.font = "700 20px system-ui, -apple-system, sans-serif";
+  ctx.fillText(
+    "COPA HOSTERÍA  ·  4° EDICIÓN  ·  28.11.2026  ·  copa-hosteria.vercel.app",
+    width / 2,
+    height - 54
+  );
+
+  const link = document.createElement("a");
+  link.download = "copa-hosteria-fixture-oficial-2026.png";
   link.href = canvas.toDataURL("image/png");
   link.click();
 }

@@ -20,6 +20,27 @@ import {
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "copa-hosteria-db.json");
 
+const LEGACY_TEAM_COLORS = [
+  "#2563EB",
+  "#D49B35",
+  "#DC2626",
+  "#16A34A",
+  "#F8FAFC",
+  "#0EA5E9",
+  "#7C3AED",
+];
+
+const LEGACY_TEAM_NAMES = new Set([
+  "Equipo Azul",
+  "Equipo Dorado",
+  "Equipo Rojo",
+  "Equipo Verde",
+  "Equipo Blanco",
+  "Equipo Celeste",
+  "Equipo Violeta",
+  "Equipo Naranja",
+]);
+
 function normalizeDB(db: TournamentDB): TournamentDB {
   const hasAllOfficialEditions =
     Array.isArray(db.editions) &&
@@ -83,7 +104,21 @@ function normalizeDB(db: TournamentDB): TournamentDB {
     }
   }
 
-  if (hasAllOfficialEditions && !playersChanged && !needsOfficialDrawSync) {
+  const hasLegacyColors =
+    !needsOfficialDrawSync &&
+    Array.isArray(db.teams) &&
+    db.teams.length === OFFICIAL_DRAW_TEAM_COUNT &&
+    db.teams.every(
+      (t, idx) =>
+        t.color.toUpperCase() === LEGACY_TEAM_COLORS[idx]?.toUpperCase()
+    );
+
+  if (
+    hasAllOfficialEditions &&
+    !playersChanged &&
+    !needsOfficialDrawSync &&
+    !hasLegacyColors
+  ) {
     return db;
   }
 
@@ -91,17 +126,29 @@ function normalizeDB(db: TournamentDB): TournamentDB {
     ? Array.from({ length: OFFICIAL_DRAW_TEAM_COUNT }, (_, i) => {
         const existing = db.teams?.[i];
         const preset = DEFAULT_TEAMS_META[i % DEFAULT_TEAMS_META.length];
+        const keepCustomName =
+          existing?.name && !LEGACY_TEAM_NAMES.has(existing.name);
         return {
           id: existing?.id ?? `team-${i + 1}`,
           editionId: "ed-2026",
-          name: existing?.name ?? preset.name,
-          color: existing?.color ?? preset.color,
+          name: keepCustomName ? existing.name : preset.name,
+          color: preset.color,
           playerIds: [],
           captainId: null,
           maxPlayers: OFFICIAL_PLAYERS_PER_TEAM,
         };
       })
-    : db.teams;
+    : hasLegacyColors
+      ? db.teams.map((t, i) => {
+          const preset = DEFAULT_TEAMS_META[i % DEFAULT_TEAMS_META.length];
+          const keepCustomName = t.name && !LEGACY_TEAM_NAMES.has(t.name);
+          return {
+            ...t,
+            name: keepCustomName ? t.name : preset.name,
+            color: preset.color,
+          };
+        })
+      : db.teams;
 
   const nextDraw = needsOfficialDrawSync
     ? {

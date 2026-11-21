@@ -455,8 +455,8 @@ function renderFixtureSummaryPage(
       cursorY += 7;
     }
 
-    const home = teamMap.get(m.homeTeamId)?.name ?? "Local";
-    const away = teamMap.get(m.awayTeamId)?.name ?? "Visitante";
+    const home = teamMap.get(m.homeTeamId)?.name ?? m.homePlaceholder ?? "Local";
+    const away = teamMap.get(m.awayTeamId)?.name ?? m.awayPlaceholder ?? "Visitante";
     const score = getMatchScore(m);
     const hasScore = m.status !== "pendiente" || m.events.length > 0;
 

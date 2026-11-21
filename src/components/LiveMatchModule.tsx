@@ -13,6 +13,7 @@ import {
   Sparkles,
   Trash2,
   FileDown,
+  Download,
   Trophy,
   Swords,
   Minus,
@@ -27,16 +28,18 @@ import {
 } from "@/types/tournament";
 import {
   calculateStandings,
+  generateCopaHosteriaFixture,
   generatePlayoffDirectFinal,
   generatePlayoffSemifinals,
-  generateRoundRobinMatches,
   getExpelledPlayersInMatch,
   getMatchLoserTeamId,
   getMatchScore,
   getMatchWinnerTeamId,
   getPlayerMatchCardState,
   getSuspendedPlayersForMatch,
+  syncPlayoffBracket,
 } from "@/lib/stats";
+import { downloadFixturePosterPng } from "@/lib/export";
 import { exportFullFixturePdf, exportMatchSheetPdf } from "@/lib/exportPdf";
 import { formatStars } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -93,11 +96,11 @@ export function LiveMatchModule({
   );
 
   const handleGenerateFixture = () => {
-    const generated = generateRoundRobinMatches(db.teams);
+    const generated = generateCopaHosteriaFixture(db.teams);
     if (generated.length === 0) return;
     onUpdateDB((prev) => ({
       ...prev,
-      matches: [...prev.matches, ...generated],
+      matches: generated,
     }));
   };
 
@@ -136,12 +139,15 @@ export function LiveMatchModule({
     matchId: string,
     status: Match["status"]
   ) => {
-    onUpdateDB((prev) => ({
-      ...prev,
-      matches: prev.matches.map((m) =>
+    onUpdateDB((prev) => {
+      const updated = prev.matches.map((m) =>
         m.id === matchId ? { ...m, status } : m
-      ),
-    }));
+      );
+      return {
+        ...prev,
+        matches: syncPlayoffBracket(prev.teams, updated),
+      };
+    });
   };
 
   const openEventModal = (type: MatchEventType) => {
@@ -172,17 +178,20 @@ export function LiveMatchModule({
       createdAt: new Date().toISOString(),
     };
 
-    onUpdateDB((prev) => ({
-      ...prev,
-      matches: prev.matches.map((m) => {
+    onUpdateDB((prev) => {
+      const updated = prev.matches.map((m) => {
         if (m.id !== selectedMatch.id) return m;
         return {
           ...m,
           status: m.status === "pendiente" ? "en_vivo" : m.status,
           events: [...m.events, newEvent],
         };
-      }),
-    }));
+      });
+      return {
+        ...prev,
+        matches: syncPlayoffBracket(prev.teams, updated),
+      };
+    });
 
     const pName = playerMap.get(playerId)?.name ?? "Jugador";
     if (isSecondYellow) {
@@ -201,14 +210,17 @@ export function LiveMatchModule({
 
   const handleUndoLastEvent = () => {
     if (!selectedMatch || selectedMatch.events.length === 0) return;
-    onUpdateDB((prev) => ({
-      ...prev,
-      matches: prev.matches.map((m) =>
+    onUpdateDB((prev) => {
+      const updated = prev.matches.map((m) =>
         m.id === selectedMatch.id
           ? { ...m, events: m.events.slice(0, -1) }
           : m
-      ),
-    }));
+      );
+      return {
+        ...prev,
+        matches: syncPlayoffBracket(prev.teams, updated),
+      };
+    });
     setSuspensionAlert(null);
   };
 
@@ -325,9 +337,8 @@ export function LiveMatchModule({
     side: "home" | "away",
     delta: number
   ) => {
-    onUpdateDB((prev) => ({
-      ...prev,
-      matches: prev.matches.map((m) => {
+    onUpdateDB((prev) => {
+      const updated = prev.matches.map((m) => {
         if (m.id !== matchId) return m;
         const currHome = m.penaltiesHome ?? 0;
         const currAway = m.penaltiesAway ?? 0;
@@ -338,8 +349,12 @@ export function LiveMatchModule({
           penaltiesAway:
             side === "away" ? Math.max(0, currAway + delta) : currAway,
         };
-      }),
-    }));
+      });
+      return {
+        ...prev,
+        matches: syncPlayoffBracket(prev.teams, updated),
+      };
+    });
   };
 
   // Group league matches by roundLabel
@@ -913,9 +928,63 @@ export function LiveMatchModule({
   }
 
   // --- LIST VIEW: FIXTURE & PLAYOFFS ---
+  const isVeryDarkColor = (hex?: string) => {
+    if (!hex) return false;
+    const clean = hex.replace("#", "").trim();
+    if (clean.length !== 6) return false;
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b < 45;
+  };
+
+  const renderTeamColorName = (
+    team: Team | undefined,
+    placeholder: string,
+    align: "left" | "right" = "left",
+    crossed = false
+  ) => {
+    const label = team?.name ?? placeholder;
+    if (!team) {
+      return (
+        <span
+          className={`truncate text-xs sm:text-sm font-bold italic text-blue-200/70 ${
+            align === "right" ? "text-right" : "text-left"
+          }`}
+        >
+          {label}
+        </span>
+      );
+    }
+
+    if (isVeryDarkColor(team.color)) {
+      return (
+        <span
+          className={`inline-flex max-w-full items-center truncate rounded-lg border border-white/70 bg-[#111827] px-2 py-0.5 text-xs sm:text-sm font-black uppercase tracking-tight text-white shadow-sm ${
+            crossed ? "opacity-50 line-through" : ""
+          }`}
+        >
+          {label}
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className={`truncate text-xs sm:text-sm font-black uppercase tracking-tight drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)] ${
+          align === "right" ? "text-right" : "text-left"
+        } ${crossed ? "opacity-50 line-through" : ""}`}
+        style={{ color: team.color }}
+      >
+        {label}
+      </span>
+    );
+  };
+
   const renderPlayoffCard = (match: Match, highlight = false) => {
     const home = teamMap.get(match.homeTeamId);
     const away = teamMap.get(match.awayTeamId);
+    const isReady = Boolean(home && away);
     const score = getMatchScore(match);
     const winnerId = getMatchWinnerTeamId(match);
     const hasPenalties =
@@ -924,8 +993,12 @@ export function LiveMatchModule({
     return (
       <Card
         key={match.id}
-        onClick={() => setSelectedMatchId(match.id)}
-        className={`cursor-pointer transition active:scale-[0.99] ${
+        onClick={() => {
+          if (isReady) setSelectedMatchId(match.id);
+        }}
+        className={`transition ${
+          isReady ? "cursor-pointer active:scale-[0.99]" : "opacity-90"
+        } ${
           highlight
             ? "border-[#F5CE78]/70 bg-gradient-to-b from-[#173982]/90 to-[#091A42]/95 shadow-lg shadow-[#D49B35]/15"
             : "border-[#D49B35]/35 hover:border-[#F5CE78]/65"
@@ -933,9 +1006,16 @@ export function LiveMatchModule({
       >
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-[#F5CE78]">
-              {match.roundLabel}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-lg bg-[#D49B35] px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-[#071433]">
+                {match.roundLabel}
+              </span>
+              {match.scheduledTime && (
+                <span className="text-xs font-extrabold text-[#F5CE78]">
+                  {match.scheduledTime}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1.5">
               <Badge
                 variant={
@@ -950,7 +1030,9 @@ export function LiveMatchModule({
                   ? "● EN VIVO"
                   : match.status === "finalizado"
                     ? "FINAL"
-                    : "PENDIENTE"}
+                    : isReady
+                      ? "PENDIENTE"
+                      : "A DEFINIR"}
               </Badge>
               {isOrganizer && (
                 <button
@@ -969,26 +1051,19 @@ export function LiveMatchModule({
           </div>
 
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className="h-3.5 w-3.5 shrink-0 rounded-full border border-white"
-                style={{ backgroundColor: home?.color ?? "#2563EB" }}
-              />
-              <span
-                className={`truncate text-sm font-bold ${
-                  winnerId && winnerId !== match.homeTeamId
-                    ? "text-white/50 line-through"
-                    : "text-white"
-                }`}
-              >
-                {home?.name ?? "Local"}
-              </span>
+            <div className="flex items-center justify-end gap-2 min-w-0">
+              {renderTeamColorName(
+                home,
+                match.homePlaceholder ?? "Local",
+                "right",
+                Boolean(winnerId && winnerId !== match.homeTeamId)
+              )}
             </div>
 
             <div className="flex flex-col items-center">
-              <div className="rounded-xl bg-[#071433]/90 px-3 py-1 text-base font-black tabular-nums text-[#F5CE78]">
+              <div className="rounded-xl bg-[#071433]/90 px-3 py-1 text-sm sm:text-base font-black tabular-nums text-[#F5CE78]">
                 {match.status === "pendiente" && match.events.length === 0
-                  ? "vs"
+                  ? "V."
                   : `${score.home} - ${score.away}`}
               </div>
               {hasPenalties && (
@@ -998,20 +1073,13 @@ export function LiveMatchModule({
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 min-w-0">
-              <span
-                className={`truncate text-right text-sm font-bold ${
-                  winnerId && winnerId !== match.awayTeamId
-                    ? "text-white/50 line-through"
-                    : "text-white"
-                }`}
-              >
-                {away?.name ?? "Visitante"}
-              </span>
-              <span
-                className="h-3.5 w-3.5 shrink-0 rounded-full border border-white"
-                style={{ backgroundColor: away?.color ?? "#D49B35" }}
-              />
+            <div className="flex items-center justify-start gap-2 min-w-0">
+              {renderTeamColorName(
+                away,
+                match.awayPlaceholder ?? "Visitante",
+                "left",
+                Boolean(winnerId && winnerId !== match.awayTeamId)
+              )}
             </div>
           </div>
 
@@ -1241,7 +1309,7 @@ export function LiveMatchModule({
                 className="w-full"
               >
                 <Sparkles className="h-4 w-4" />
-                Generar Fixture (Todos contra Todos)
+                Generar Fixture Oficial (F1–F7 + Semis + Final)
               </Button>
               <Button
                 size="lg"
@@ -1260,140 +1328,273 @@ export function LiveMatchModule({
           )}
 
           {db.matches.length > 0 && (
-            <Button
-              size="lg"
-              variant="outline"
-              onClick={() =>
-                exportFullFixturePdf(db.teams, db.players, db.matches)
-              }
-              className="w-full"
-            >
-              <FileDown className="h-4 w-4" />
-              Exportar Fixture y Planillas en PDF (Planillero)
-            </Button>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => downloadFixturePosterPng(db.teams, db.matches)}
+                className="w-full border-[#D49B35]/55 text-[#F5CE78] hover:bg-[#D49B35]/15"
+              >
+                <Download className="h-4 w-4" />
+                Descargar Placa Fixture (PNG)
+              </Button>
+              <Button
+                size="lg"
+                variant="secondary"
+                onClick={() =>
+                  exportFullFixturePdf(db.teams, db.players, db.matches)
+                }
+                className="w-full"
+              >
+                <FileDown className="h-4 w-4 text-[#F0C46B]" />
+                Exportar Fixture y Planillas (PDF)
+              </Button>
+            </div>
           )}
 
-      {matchesByRound.length === 0 ? (
-        <Card className="border-[#D49B35]/30">
-          <CardContent className="flex flex-col items-center py-12 sm:py-14 text-center space-y-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D49B35]/40 bg-[#D49B35]/15 text-[#F5CE78] shadow-md shadow-[#D49B35]/10">
-              <CalendarPlus className="h-7 w-7" />
-            </div>
-            <div className="space-y-1 max-w-sm">
-              <p className="text-base sm:text-lg font-extrabold text-white">
-                Aún no hay partidos programados
-              </p>
-              <p className="text-xs sm:text-sm text-blue-100/80 leading-relaxed">
-                {isOrganizer
-                  ? "Generá el fixture automático todos contra todos o creá un partido manual."
-                  : "Cuando el organizador genere el fixture de la 4° Edición, aparecerá aquí."}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        matchesByRound.map(([roundLabel, roundMatches]) => (
-          <div key={roundLabel} className="space-y-2.5">
-            <div className="flex items-center justify-between px-1">
-              <h3 className="text-xs font-extrabold uppercase tracking-widest text-[#F5CE78]">
-                {roundLabel}
-              </h3>
-              <span className="text-xs font-semibold text-blue-100/75">
-                {roundMatches.length}{" "}
-                {roundMatches.length === 1 ? "partido" : "partidos"}
-              </span>
-            </div>
+          {db.matches.length === 0 ? (
+            <Card className="border-[#D49B35]/30">
+              <CardContent className="flex flex-col items-center py-12 sm:py-14 text-center space-y-3">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D49B35]/40 bg-[#D49B35]/15 text-[#F5CE78] shadow-md shadow-[#D49B35]/10">
+                  <CalendarPlus className="h-7 w-7" />
+                </div>
+                <div className="space-y-1 max-w-sm">
+                  <p className="text-base sm:text-lg font-extrabold text-white">
+                    Aún no hay partidos programados
+                  </p>
+                  <p className="text-xs sm:text-sm text-blue-100/80 leading-relaxed">
+                    {isOrganizer
+                      ? "Presioná \"Generar Fixture Oficial\" para armar F1 a F7, Semifinales y Final con los horarios oficiales."
+                      : "Cuando el organizador genere el fixture de la 4° Edición, aparecerá aquí."}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="overflow-hidden border-[#D49B35]/45 bg-gradient-to-b from-[#0F2557]/95 via-[#0A1B42]/95 to-[#071433]/98 shadow-xl shadow-black/30">
+              <CardHeader className="border-b border-[#D49B35]/30 bg-[#071433]/70 pb-3">
+                <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-sm sm:text-base">
+                  <span className="font-black tracking-wide text-white">
+                    FIXTURE OFICIAL · 4° EDICIÓN (28.11.2026)
+                  </span>
+                  <Badge variant="gold">
+                    {db.matches.filter((m) => m.status === "finalizado").length}{" "}
+                    / {db.matches.length} jugados
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-4 space-y-4">
+                {/* Fase de Grupos (F1..F7) */}
+                {matchesByRound.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <h3 className="text-[11px] font-black uppercase tracking-widest text-[#F5CE78]">
+                        Fase de Grupos · Tabla Única
+                      </h3>
+                      <span className="text-[11px] font-semibold text-blue-200/70">
+                        2 partidos por equipo
+                      </span>
+                    </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {roundMatches.map((match) => {
-                const home = teamMap.get(match.homeTeamId);
-                const away = teamMap.get(match.awayTeamId);
-                const score = getMatchScore(match);
-                const expelled = getExpelledPlayersInMatch(match);
+                    <div className="space-y-2">
+                      {matchesByRound.flatMap(([, roundMatches]) =>
+                        roundMatches.map((match) => {
+                          const home = teamMap.get(match.homeTeamId);
+                          const away = teamMap.get(match.awayTeamId);
+                          const score = getMatchScore(match);
+                          const expelled = getExpelledPlayersInMatch(match);
+                          const hasScore =
+                            match.status !== "pendiente" ||
+                            match.events.length > 0;
 
-                return (
-                  <Card
-                    key={match.id}
-                    onClick={() => setSelectedMatchId(match.id)}
-                    className="cursor-pointer transition hover:border-[#F5CE78]/60 hover:bg-[#0D2357]/90 active:scale-[0.99]"
-                  >
-                    <CardContent className="p-4 sm:p-4">
-                      <div className="mb-2.5 flex items-center justify-between">
-                        <Badge
-                          variant={
-                            match.status === "en_vivo"
-                              ? "live"
-                              : match.status === "finalizado"
-                                ? "gold"
-                                : "muted"
-                          }
-                        >
-                          {match.status === "en_vivo"
-                            ? "● EN VIVO"
-                            : match.status === "finalizado"
-                              ? "FINAL"
-                              : "PENDIENTE"}
-                        </Badge>
-                        <div className="flex items-center gap-2">
-                          {expelled.size > 0 && (
-                            <Badge variant="danger">
-                              🟥 {expelled.size} exp.
-                            </Badge>
-                          )}
-                          {isOrganizer && (
-                            <button
-                              type="button"
-                              aria-label="Eliminar partido"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteMatch(match.id);
-                              }}
-                              className="rounded-lg p-1 text-blue-200/50 hover:bg-red-500/20 hover:text-red-300"
+                          return (
+                            <div
+                              key={match.id}
+                              onClick={() => setSelectedMatchId(match.id)}
+                              className="group grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3 rounded-xl border border-[#D49B35]/30 bg-[#10295E]/75 px-2.5 py-2.5 sm:px-3.5 sm:py-3 cursor-pointer transition hover:border-[#F5CE78]/70 hover:bg-[#143478]/85 active:scale-[0.995]"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                              {/* Left: Instance label */}
+                              <div className="flex items-center gap-1.5">
+                                <span className="inline-flex min-w-[46px] sm:min-w-[56px] justify-center rounded-lg bg-[#D49B35] px-2 py-1 text-[11px] sm:text-xs font-black uppercase tracking-wider text-[#071433] shadow-sm">
+                                  {match.roundLabel}
+                                </span>
+                                {match.status === "en_vivo" && (
+                                  <span
+                                    title="En vivo"
+                                    className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"
+                                  />
+                                )}
+                              </div>
 
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className="h-3.5 w-3.5 shrink-0 rounded-full border border-white"
-                            style={{ backgroundColor: home?.color ?? "#2563EB" }}
-                          />
-                          <span className="truncate text-sm font-bold text-white">
-                            {home?.name ?? "Local"}
-                          </span>
-                        </div>
+                              {/* Center: Team A V. Team B */}
+                              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-2.5 min-w-0">
+                                <div className="flex justify-end min-w-0">
+                                  {renderTeamColorName(home, "Local", "right")}
+                                </div>
+                                <span className="rounded-md bg-[#071433]/90 px-2 py-0.5 text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78] border border-[#D49B35]/30">
+                                  {hasScore
+                                    ? `${score.home} - ${score.away}`
+                                    : "V."}
+                                </span>
+                                <div className="flex justify-start min-w-0">
+                                  {renderTeamColorName(
+                                    away,
+                                    "Visitante",
+                                    "left"
+                                  )}
+                                </div>
+                              </div>
 
-                        <div className="rounded-xl bg-[#0A1B42]/90 px-3 py-1 text-base font-black tabular-nums text-[#F0C46B]">
-                          {match.status === "pendiente" &&
-                          match.events.length === 0
-                            ? "vs"
-                            : `${score.home} - ${score.away}`}
-                        </div>
+                              {/* Right: Time & Status */}
+                              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                {expelled.size > 0 && (
+                                  <span
+                                    title={`${expelled.size} expulsado(s)`}
+                                    className="hidden sm:inline text-xs"
+                                  >
+                                    🟥
+                                  </span>
+                                )}
+                                <div className="flex flex-col items-end">
+                                  {match.scheduledTime && (
+                                    <span className="text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78]">
+                                      {match.scheduledTime}
+                                    </span>
+                                  )}
+                                  {match.status === "finalizado" && (
+                                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">
+                                      FINAL
+                                    </span>
+                                  )}
+                                  {match.status === "en_vivo" && (
+                                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-red-400">
+                                      EN VIVO
+                                    </span>
+                                  )}
+                                </div>
+                                {isOrganizer && (
+                                  <button
+                                    type="button"
+                                    aria-label="Eliminar partido"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteMatch(match.id);
+                                    }}
+                                    className="rounded-lg p-1 text-blue-200/45 hover:bg-red-500/20 hover:text-red-300"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                        <div className="flex items-center justify-end gap-2 min-w-0">
-                          <span className="truncate text-right text-sm font-bold text-white">
-                            {away?.name ?? "Visitante"}
-                          </span>
-                          <span
-                            className="h-3.5 w-3.5 shrink-0 rounded-full border border-white"
-                            style={{ backgroundColor: away?.color ?? "#D49B35" }}
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
-        ))
-      )}
+                {/* Fase Final (SEMI 1, SEMI 2, FINAL) */}
+                {playoffMatches.length > 0 && (
+                  <div className="space-y-2 border-t border-[#D49B35]/30 pt-3.5">
+                    <div className="flex items-center justify-between px-1">
+                      <h3 className="text-[11px] font-black uppercase tracking-widest text-[#F5CE78]">
+                        Fase Final · Cruces Automáticos
+                      </h3>
+                      <span className="text-[11px] font-semibold text-blue-200/70">
+                        Top 4 de la tabla
+                      </span>
+                    </div>
 
-          {isOrganizer && matchesByRound.length > 0 && (
+                    <div className="space-y-2">
+                      {playoffMatches.map((match) => {
+                        const home = teamMap.get(match.homeTeamId);
+                        const away = teamMap.get(match.awayTeamId);
+                        const isReady = Boolean(home && away);
+                        const isFinal = match.playoffSlot === "final";
+                        const score = getMatchScore(match);
+                        const hasScore =
+                          match.status !== "pendiente" ||
+                          match.events.length > 0;
+
+                        return (
+                          <div
+                            key={match.id}
+                            onClick={() => {
+                              if (isReady) setSelectedMatchId(match.id);
+                            }}
+                            className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3 rounded-xl px-2.5 py-2.5 sm:px-3.5 sm:py-3 transition ${
+                              isReady
+                                ? "cursor-pointer active:scale-[0.995]"
+                                : "opacity-90"
+                            } ${
+                              isFinal
+                                ? "border-2 border-[#F5CE78]/75 bg-gradient-to-r from-[#D49B35]/20 via-[#15357A]/90 to-[#D49B35]/20 shadow-md shadow-[#D49B35]/15"
+                                : "border border-[#F5CE78]/45 bg-[#143275]/80 hover:border-[#F5CE78]/75"
+                            }`}
+                          >
+                            {/* Left: SEMI 1 / SEMI 2 / FINAL */}
+                            <span
+                              className={`inline-flex min-w-[64px] sm:min-w-[74px] justify-center rounded-lg px-2 py-1 text-[11px] sm:text-xs font-black uppercase tracking-wider text-[#071433] shadow-sm ${
+                                isFinal ? "bg-[#F5CE78]" : "bg-[#D49B35]"
+                              }`}
+                            >
+                              {match.roundLabel}
+                            </span>
+
+                            {/* Center: Team A V. Team B */}
+                            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 sm:gap-2.5 min-w-0">
+                              <div className="flex justify-end min-w-0">
+                                {renderTeamColorName(
+                                  home,
+                                  match.homePlaceholder ?? "Por definir",
+                                  "right"
+                                )}
+                              </div>
+                              <span className="rounded-md bg-[#071433]/90 px-2 py-0.5 text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78] border border-[#D49B35]/35">
+                                {hasScore
+                                  ? `${score.home} - ${score.away}`
+                                  : "V."}
+                              </span>
+                              <div className="flex justify-start min-w-0">
+                                {renderTeamColorName(
+                                  away,
+                                  match.awayPlaceholder ?? "Por definir",
+                                  "left"
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Right: Time */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex flex-col items-end">
+                                {match.scheduledTime && (
+                                  <span
+                                    className={`text-[11px] sm:text-xs font-black tabular-nums ${
+                                      isFinal ? "text-white" : "text-[#F5CE78]"
+                                    }`}
+                                  >
+                                    {match.scheduledTime}
+                                  </span>
+                                )}
+                                {match.status === "finalizado" && (
+                                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">
+                                    FINAL
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {isOrganizer && db.matches.length > 0 && (
             <div className="flex justify-end pt-1">
               <Button
                 size="sm"

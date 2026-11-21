@@ -75,6 +75,7 @@ export function getSuspendedPlayersForMatch(
   const suspended = new Map<string, string>();
 
   const checkTeam = (teamId: string) => {
+    if (!teamId) return;
     const teamMatches = allMatches
       .filter((m) => m.homeTeamId === teamId || m.awayTeamId === teamId)
       .sort((a, b) => {
@@ -122,6 +123,7 @@ export function getActiveSuspensions(allMatches: Match[]): Map<string, string> {
   for (const m of allMatches) {
     if (m.status === "pendiente" && m.events.length === 0) continue;
     for (const tid of [m.homeTeamId, m.awayTeamId]) {
+      if (!tid) continue;
       const list = playedByTeam.get(tid) ?? [];
       list.push(m);
       playedByTeam.set(tid, list);
@@ -422,4 +424,164 @@ export function generatePlayoffDirectFinal(
     events: [],
     createdAt: new Date(now).toISOString(),
   };
+}
+
+/**
+ * Generates the official Copa Hostería 4° Edición (28.11.2026) 7-team fixture:
+ * 7 group-stage matches (F1..F7, 2 per team in single table) + SEMI 1 + SEMI 2 + FINAL.
+ * Falls back to round-robin if there are fewer than 7 teams.
+ */
+export function generateCopaHosteriaFixture(teams: Team[]): Match[] {
+  const validTeams = teams.filter((t) => t.name.trim().length > 0);
+  if (validTeams.length < 7) {
+    return generateRoundRobinMatches(validTeams);
+  }
+
+  const now = Date.now();
+  const groupSchedule: {
+    label: string;
+    time: string;
+    homeIdx: number;
+    awayIdx: number;
+  }[] = [
+    { label: "F1", time: "15.30 HS", homeIdx: 0, awayIdx: 3 }, // Eq 1 vs Eq 4
+    { label: "F2", time: "16.00 HS", homeIdx: 1, awayIdx: 6 }, // Eq 2 vs Eq 7
+    { label: "F3", time: "16.40 HS", homeIdx: 4, awayIdx: 2 }, // Eq 5 vs Eq 3
+    { label: "F4", time: "17.20 HS", homeIdx: 5, awayIdx: 0 }, // Eq 6 vs Eq 1
+    { label: "F5", time: "18.00 HS", homeIdx: 3, awayIdx: 1 }, // Eq 4 vs Eq 2
+    { label: "F6", time: "18.40 HS", homeIdx: 6, awayIdx: 4 }, // Eq 7 vs Eq 5
+    { label: "F7", time: "19.20 HS", homeIdx: 2, awayIdx: 5 }, // Eq 3 vs Eq 6
+  ];
+
+  const groupMatches: Match[] = groupSchedule.map((item, idx) => ({
+    id: `m-${now}-f${idx + 1}`,
+    editionId: "ed-2026",
+    round: idx + 1,
+    roundLabel: item.label,
+    stage: "liga",
+    scheduledTime: item.time,
+    homeTeamId: validTeams[item.homeIdx].id,
+    awayTeamId: validTeams[item.awayIdx].id,
+    status: "pendiente",
+    events: [],
+    createdAt: new Date(now + idx * 1000).toISOString(),
+  }));
+
+  const playoffMatches: Match[] = [
+    {
+      id: `po-sf1-${now}`,
+      editionId: "ed-2026",
+      round: 8,
+      roundLabel: "SEMI 1",
+      stage: "playoff",
+      playoffSlot: "sf1",
+      scheduledTime: "20.00 HS",
+      homeTeamId: "",
+      awayTeamId: "",
+      homePlaceholder: "1° Zona",
+      awayPlaceholder: "4° Zona",
+      status: "pendiente",
+      events: [],
+      createdAt: new Date(now + 8000).toISOString(),
+    },
+    {
+      id: `po-sf2-${now}`,
+      editionId: "ed-2026",
+      round: 9,
+      roundLabel: "SEMI 2",
+      stage: "playoff",
+      playoffSlot: "sf2",
+      scheduledTime: "20.40 HS",
+      homeTeamId: "",
+      awayTeamId: "",
+      homePlaceholder: "2° Zona",
+      awayPlaceholder: "3° Zona",
+      status: "pendiente",
+      events: [],
+      createdAt: new Date(now + 9000).toISOString(),
+    },
+    {
+      id: `po-final-${now}`,
+      editionId: "ed-2026",
+      round: 10,
+      roundLabel: "FINAL",
+      stage: "playoff",
+      playoffSlot: "final",
+      scheduledTime: "21.30 HS",
+      homeTeamId: "",
+      awayTeamId: "",
+      homePlaceholder: "Ganador S1",
+      awayPlaceholder: "Ganador S2",
+      status: "pendiente",
+      events: [],
+      createdAt: new Date(now + 10000).toISOString(),
+    },
+  ];
+
+  return [...groupMatches, ...playoffMatches];
+}
+
+/**
+ * Automatically populates SEMI 1 (1° vs 4°) and SEMI 2 (2° vs 3°) once all group matches
+ * are finalized, and populates FINAL (Ganador S1 vs Ganador S2) as semifinals finish.
+ */
+export function syncPlayoffBracket(teams: Team[], matches: Match[]): Match[] {
+  const groupMatches = matches.filter((m) => m.stage !== "playoff");
+  const allGroupsFinished =
+    groupMatches.length > 0 &&
+    groupMatches.every((m) => m.status === "finalizado");
+
+  const standings = calculateStandings(teams, matches);
+
+  const afterSemis = matches.map((m) => {
+    if (m.stage !== "playoff") return m;
+    if (m.playoffSlot !== "sf1" && m.playoffSlot !== "sf2") return m;
+    if (m.status !== "pendiente" || m.events.length > 0) return m;
+
+    if (allGroupsFinished && standings.length >= 4) {
+      if (m.playoffSlot === "sf1") {
+        return {
+          ...m,
+          homeTeamId: standings[0].teamId,
+          awayTeamId: standings[3].teamId,
+        };
+      }
+      return {
+        ...m,
+        homeTeamId: standings[1].teamId,
+        awayTeamId: standings[2].teamId,
+      };
+    }
+
+    // If placeholders exist and group stage is not finished yet, keep placeholders
+    if (m.homePlaceholder || m.awayPlaceholder) {
+      return {
+        ...m,
+        homeTeamId: "",
+        awayTeamId: "",
+      };
+    }
+    return m;
+  });
+
+  const sf1 = afterSemis.find(
+    (m) => m.stage === "playoff" && m.playoffSlot === "sf1"
+  );
+  const sf2 = afterSemis.find(
+    (m) => m.stage === "playoff" && m.playoffSlot === "sf2"
+  );
+  const sf1Winner = sf1 ? getMatchWinnerTeamId(sf1) : null;
+  const sf2Winner = sf2 ? getMatchWinnerTeamId(sf2) : null;
+
+  return afterSemis.map((m) => {
+    if (m.stage !== "playoff" || m.playoffSlot !== "final") return m;
+    if (m.status !== "pendiente" || m.events.length > 0) return m;
+    if (!m.homePlaceholder && !m.awayPlaceholder) return m;
+
+    return {
+      ...m,
+      homeTeamId: sf1Winner ?? "",
+      awayTeamId: sf2Winner ?? "",
+    };
+  });
 }
