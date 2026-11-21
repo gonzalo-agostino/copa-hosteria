@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Lock, Unlock, Delete, ShieldCheck, ShieldBan, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -102,77 +102,115 @@ export function OrganizerPinModal({
     };
   }, [open, isOrganizer]);
 
-  const verifyPin = async (enteredPin: string) => {
-    setSubmitting(true);
-    setErrorMsg(null);
-    try {
-      const res = await fetch("/api/organizer/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: enteredPin }),
-      });
+  const verifyPin = useCallback(
+    async (enteredPin: string) => {
+      setSubmitting(true);
+      setErrorMsg(null);
+      try {
+        const res = await fetch("/api/organizer/auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: enteredPin }),
+        });
 
-      const data = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        blocked?: boolean;
-        remainingAttempts?: number;
-      };
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          blocked?: boolean;
+          remainingAttempts?: number;
+        };
 
-      if (res.ok && data.ok) {
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem(LOCAL_BLOCK_KEY);
+        if (res.ok && data.ok) {
+          if (typeof window !== "undefined") {
+            window.localStorage.removeItem(LOCAL_BLOCK_KEY);
+          }
+          onUnlock();
+          setPin("");
+          setErrorMsg(null);
+          onOpenChange(false);
+          return;
         }
-        onUnlock();
-        setPin("");
-        setErrorMsg(null);
-        onOpenChange(false);
-        return;
-      }
 
-      const left = data.remainingAttempts ?? 0;
-      setRemainingAttempts(left);
+        const left = data.remainingAttempts ?? 0;
+        setRemainingAttempts(left);
 
-      if (data.blocked || left <= 0) {
-        setIsBlocked(true);
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem(LOCAL_BLOCK_KEY, "1");
+        if (data.blocked || left <= 0) {
+          setIsBlocked(true);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(LOCAL_BLOCK_KEY, "1");
+          }
+          setErrorMsg(null);
+        } else {
+          setErrorMsg(
+            left === 1
+              ? "PIN incorrecto. Te queda 1 último intento."
+              : `PIN incorrecto. Te quedan ${left} intentos.`
+          );
         }
-        setErrorMsg(null);
-      } else {
-        setErrorMsg(
-          left === 1
-            ? "PIN incorrecto. Te queda 1 último intento."
-            : `PIN incorrecto. Te quedan ${left} intentos.`
-        );
-      }
 
-      setTimeout(() => {
+        setTimeout(() => {
+          setPin("");
+        }, 350);
+      } catch {
+        setErrorMsg("No se pudo verificar el PIN. Intentá de nuevo.");
         setPin("");
-      }, 350);
-    } catch {
-      setErrorMsg("No se pudo verificar el PIN. Intentá de nuevo.");
-      setPin("");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [onOpenChange, onUnlock]
+  );
 
-  const handleDigit = (digit: string) => {
-    if (pin.length >= 4 || isBlocked || submitting || checking) return;
-    const next = pin + digit;
-    setPin(next);
-    setErrorMsg(null);
+  const handleDigit = useCallback(
+    (digit: string) => {
+      if (pin.length >= 4 || isBlocked || submitting || checking) return;
+      const next = pin + digit;
+      setPin(next);
+      setErrorMsg(null);
 
-    if (next.length === 4) {
-      void verifyPin(next);
-    }
-  };
+      if (next.length === 4) {
+        void verifyPin(next);
+      }
+    },
+    [checking, isBlocked, pin, submitting, verifyPin]
+  );
 
-  const handleBackspace = () => {
+  const handleBackspace = useCallback(() => {
     if (submitting) return;
     setPin((prev) => prev.slice(0, -1));
     setErrorMsg(null);
-  };
+  }, [submitting]);
+
+  useEffect(() => {
+    if (!open || isOrganizer || isBlocked || checking) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        handleDigit(e.key);
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
+        handleBackspace();
+      } else if (e.key === "Delete") {
+        e.preventDefault();
+        if (!submitting) {
+          setPin("");
+          setErrorMsg(null);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    open,
+    isOrganizer,
+    isBlocked,
+    checking,
+    submitting,
+    handleDigit,
+    handleBackspace,
+  ]);
 
   const handleClearBlockedDevices = async () => {
     const res = await fetch("/api/organizer/auth", { method: "DELETE" });
