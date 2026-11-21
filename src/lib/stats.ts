@@ -175,6 +175,7 @@ export function calculateStandings(
       gc: 0,
       dg: 0,
       pts: 0,
+      tiebreakOrder: t.tiebreakOrder,
     });
   }
 
@@ -215,13 +216,57 @@ export function calculateStandings(
   }));
 
   rows.sort((a, b) => {
+    // 1. Mayores puntos (Victoria = 3, Empate = 1)
     if (b.pts !== a.pts) return b.pts - a.pts;
+    // 2. Mayor diferencia de gol
     if (b.dg !== a.dg) return b.dg - a.dg;
+    // 3. Mayor cantidad de goles a favor
     if (b.gf !== a.gf) return b.gf - a.gf;
+    // 4. Menos goles en contra
+    if (a.gc !== b.gc) return a.gc - b.gc;
+    // 5. Se tira la moneda (o desempate manual del organizador)
+    const tbA = a.tiebreakOrder ?? 999;
+    const tbB = b.tiebreakOrder ?? 999;
+    if (tbA !== tbB) return tbA - tbB;
     return a.teamName.localeCompare(b.teamName, "es");
   });
 
   return rows;
+}
+
+export function areStandingsTiedOnStats(
+  a: StandingRow,
+  b: StandingRow
+): boolean {
+  return (
+    a.pj > 0 &&
+    b.pj > 0 &&
+    a.pts === b.pts &&
+    a.dg === b.dg &&
+    a.gf === b.gf &&
+    a.gc === b.gc
+  );
+}
+
+export function getTiedStandingGroups(
+  standings: StandingRow[]
+): StandingRow[][] {
+  const groups: StandingRow[][] = [];
+  let i = 0;
+  while (i < standings.length) {
+    let j = i + 1;
+    while (
+      j < standings.length &&
+      areStandingsTiedOnStats(standings[i], standings[j])
+    ) {
+      j++;
+    }
+    if (j - i >= 2) {
+      groups.push(standings.slice(i, j));
+    }
+    i = j;
+  }
+  return groups;
 }
 
 export function calculatePlayerStats(

@@ -256,7 +256,13 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
           />
         )}
 
-        {activeTab === "tablas" && <StatsModule db={db} />}
+        {activeTab === "tablas" && (
+          <StatsModule
+            db={db}
+            isOrganizer={isOrganizer}
+            onUpdateDB={handleUpdateDB}
+          />
+        )}
 
         {activeTab === "jugadores" && (
           <PlayersRosterModule

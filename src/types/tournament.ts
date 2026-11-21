@@ -44,6 +44,7 @@ export interface Team {
   playerIds: string[];
   captainId?: string | null;
   maxPlayers?: number;
+  tiebreakOrder?: number;
 }
 
 export interface Pot {
@@ -137,6 +138,7 @@ export interface StandingRow {
   gc: number;
   dg: number;
   pts: number;
+  tiebreakOrder?: number;
 }
 
 export interface PlayerStatsRow {

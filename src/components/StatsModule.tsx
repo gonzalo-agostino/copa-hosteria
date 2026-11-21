@@ -1,33 +1,118 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Trophy, Target, HandHelping } from "lucide-react";
+import {
+  Trophy,
+  Target,
+  HandHelping,
+  Coins,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
 import { TournamentDB } from "@/types/tournament";
 import { SEED_EDITIONS } from "@/lib/seed";
 import {
+  areStandingsTiedOnStats,
   calculatePlayerStats,
   calculateStandings,
+  getTiedStandingGroups,
   StatsScope,
+  syncPlayoffBracket,
 } from "@/lib/stats";
 import { formatStars } from "@/lib/utils";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 interface StatsModuleProps {
   db: TournamentDB;
+  isOrganizer?: boolean;
+  onUpdateDB?: (updater: (prev: TournamentDB) => TournamentDB) => void;
 }
 
 type StatsTab = "posiciones" | "goleadores" | "asistidores";
 
-export function StatsModule({ db }: StatsModuleProps) {
+export function StatsModule({
+  db,
+  isOrganizer = false,
+  onUpdateDB,
+}: StatsModuleProps) {
   const [scope, setScope] = useState<StatsScope>("all");
   const [activeTab, setActiveTab] = useState<StatsTab>("posiciones");
+  const [coinResultMessage, setCoinResultMessage] = useState<string | null>(
+    null
+  );
 
   const standings = useMemo(
     () => calculateStandings(db.teams, db.matches),
     [db.teams, db.matches]
   );
+
+  const tiedGroups = useMemo(
+    () => getTiedStandingGroups(standings),
+    [standings]
+  );
+
+  const handleFlipCoinForGroup = (groupTeamIds: string[]) => {
+    if (!onUpdateDB || groupTeamIds.length < 2) return;
+    const shuffled = [...groupTeamIds];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    // Ensure a real change when only 2 teams are tied so tapping "Tirar Moneda" feels responsive, or pure random
+    const rankMap = new Map<string, number>();
+    shuffled.forEach((tid, idx) => rankMap.set(tid, idx + 1));
+
+    onUpdateDB((prev) => {
+      const nextTeams = prev.teams.map((t) =>
+        rankMap.has(t.id) ? { ...t, tiebreakOrder: rankMap.get(t.id) } : t
+      );
+      return {
+        ...prev,
+        teams: nextTeams,
+        matches: syncPlayoffBracket(nextTeams, prev.matches),
+      };
+    });
+
+    const teamNameMap = new Map(db.teams.map((t) => [t.id, t.name]));
+    const orderedNames = shuffled
+      .map((id, i) => `${i + 1}° ${teamNameMap.get(id) ?? id}`)
+      .join(" · ");
+    setCoinResultMessage(`🪙 Moneda lanzada: ${orderedNames}`);
+  };
+
+  const handleMoveTiedTeam = (teamId: string, direction: "up" | "down") => {
+    if (!onUpdateDB) return;
+    const idx = standings.findIndex((r) => r.teamId === teamId);
+    if (idx === -1) return;
+    const neighborIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (neighborIdx < 0 || neighborIdx >= standings.length) return;
+    if (!areStandingsTiedOnStats(standings[idx], standings[neighborIdx])) {
+      return;
+    }
+
+    const reorderedIds = standings.map((r) => r.teamId);
+    [reorderedIds[idx], reorderedIds[neighborIdx]] = [
+      reorderedIds[neighborIdx],
+      reorderedIds[idx],
+    ];
+    const rankMap = new Map<string, number>();
+    reorderedIds.forEach((tid, i) => rankMap.set(tid, i + 1));
+
+    onUpdateDB((prev) => {
+      const nextTeams = prev.teams.map((t) => ({
+        ...t,
+        tiebreakOrder: rankMap.get(t.id) ?? t.tiebreakOrder,
+      }));
+      return {
+        ...prev,
+        teams: nextTeams,
+        matches: syncPlayoffBracket(nextTeams, prev.matches),
+      };
+    });
+  };
 
   const playerStats = useMemo(
     () => calculatePlayerStats(db.players, db.teams, db.matches, scope),
@@ -214,104 +299,258 @@ export function StatsModule({ db }: StatsModuleProps) {
 
       {/* 1. TABLA DE POSICIONES */}
       {activeTab === "posiciones" && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center justify-between text-base">
-              <span className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-[#F5CE78]" />
-                Tabla de Posiciones · 4° Edición
-              </span>
-              <Badge variant="gold">2026</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-2 sm:px-5">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead>
-                  <tr className="border-b border-white/14 text-[11px] font-bold uppercase tracking-wider text-blue-100/80">
-                    <th className="py-3 pl-2.5 pr-1">#</th>
-                    <th className="py-3 px-1.5">Equipo</th>
-                    <th className="py-3 px-1.5 text-center">PJ</th>
-                    <th className="py-3 px-1.5 text-center">G</th>
-                    <th className="py-3 px-1.5 text-center">E</th>
-                    <th className="py-3 px-1.5 text-center">P</th>
-                    <th className="py-3 px-1.5 text-center hidden sm:table-cell">
-                      GF
-                    </th>
-                    <th className="py-3 px-1.5 text-center hidden sm:table-cell">
-                      GC
-                    </th>
-                    <th className="py-3 px-1.5 text-center">DG</th>
-                    <th className="py-3 pl-1.5 pr-2.5 text-center text-[#F5CE78]">
-                      Pts
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {standings.map((row, idx) => (
-                    <tr
-                      key={row.teamId}
-                      className={`transition hover:bg-white/5 ${
-                        idx === 0 ? "bg-[#D49B35]/12" : ""
-                      }`}
-                    >
-                      <td className="py-3.5 pl-2.5 pr-1 font-extrabold">
-                        <span
-                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+        <div className="space-y-3.5">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+                <span className="flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-[#F5CE78]" />
+                  Tabla de Posiciones · 4° Edición
+                </span>
+                <Badge variant="gold">Top 4 a Semifinales</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-2 sm:px-5 space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead>
+                    <tr className="border-b border-white/14 text-[11px] font-bold uppercase tracking-wider text-blue-100/80">
+                      <th className="py-3 pl-2 pr-1">#</th>
+                      <th className="py-3 px-1.5">Equipo</th>
+                      <th className="py-3 px-1 text-center">PJ</th>
+                      <th className="py-3 px-1 text-center hidden sm:table-cell">
+                        G
+                      </th>
+                      <th className="py-3 px-1 text-center hidden sm:table-cell">
+                        E
+                      </th>
+                      <th className="py-3 px-1 text-center hidden sm:table-cell">
+                        P
+                      </th>
+                      <th
+                        className="py-3 px-1 text-center"
+                        title="Diferencia de Gol (1° desempate)"
+                      >
+                        DG
+                      </th>
+                      <th
+                        className="py-3 px-1 text-center"
+                        title="Goles a Favor (2° desempate)"
+                      >
+                        GF
+                      </th>
+                      <th
+                        className="py-3 px-1 text-center"
+                        title="Goles en Contra (3° desempate)"
+                      >
+                        GC
+                      </th>
+                      <th className="py-3 pl-1 pr-2 text-center text-[#F5CE78]">
+                        Pts
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {standings.map((row, idx) => {
+                      const prevRow = idx > 0 ? standings[idx - 1] : null;
+                      const nextRow =
+                        idx < standings.length - 1 ? standings[idx + 1] : null;
+                      const canMoveUp = Boolean(
+                        prevRow && areStandingsTiedOnStats(row, prevRow)
+                      );
+                      const canMoveDown = Boolean(
+                        nextRow && areStandingsTiedOnStats(row, nextRow)
+                      );
+                      const isTied = canMoveUp || canMoveDown;
+                      const isQualified = idx < 4;
+
+                      return (
+                        <tr
+                          key={row.teamId}
+                          className={`transition hover:bg-white/5 ${
                             idx === 0
-                              ? "bg-[#D49B35] text-[#071433]"
-                              : idx === 1
-                                ? "bg-slate-300/25 text-slate-100"
-                                : idx === 2
-                                  ? "bg-amber-700/40 text-amber-200"
-                                  : "text-blue-100/80"
+                              ? "bg-[#D49B35]/14"
+                              : isQualified
+                                ? "bg-emerald-500/[0.06]"
+                                : ""
+                          } ${
+                            idx === 3 ? "border-b-2 border-[#D49B35]/55" : ""
                           }`}
                         >
-                          {idx + 1}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-1.5">
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-white/90 shadow-sm"
-                            style={{ backgroundColor: row.teamColor }}
-                          />
-                          <span className="truncate font-bold text-white max-w-[115px] sm:max-w-none">
-                            {row.teamName}
+                          <td className="py-3 pl-2 pr-1 font-extrabold">
+                            <span
+                              className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                                idx === 0
+                                  ? "bg-[#D49B35] text-[#071433]"
+                                  : isQualified
+                                    ? "border border-[#F5CE78]/65 bg-[#D49B35]/20 text-[#F5CE78]"
+                                    : "text-blue-200/60"
+                              }`}
+                            >
+                              {idx + 1}
+                            </span>
+                          </td>
+                          <td className="py-3 px-1.5">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-white/90 shadow-sm"
+                                  style={{ backgroundColor: row.teamColor }}
+                                />
+                                <span className="truncate font-bold text-white max-w-[110px] sm:max-w-none">
+                                  {row.teamName}
+                                </span>
+                                {isTied && (
+                                  <span
+                                    title="Empatado en Pts, DG, GF y GC (se define por moneda)"
+                                    className="inline-flex items-center gap-0.5 rounded bg-[#D49B35]/25 px-1.5 py-0.5 text-[10px] font-extrabold text-[#F5CE78]"
+                                  >
+                                    🪙
+                                  </span>
+                                )}
+                              </div>
+                              {isOrganizer && isTied && (
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    disabled={!canMoveUp}
+                                    title="Subir en desempate por moneda"
+                                    onClick={() =>
+                                      handleMoveTiedTeam(row.teamId, "up")
+                                    }
+                                    className="rounded p-1 text-[#F5CE78] hover:bg-white/10 disabled:opacity-25 cursor-pointer"
+                                  >
+                                    <ArrowUp className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={!canMoveDown}
+                                    title="Bajar en desempate por moneda"
+                                    onClick={() =>
+                                      handleMoveTiedTeam(row.teamId, "down")
+                                    }
+                                    className="rounded p-1 text-[#F5CE78] hover:bg-white/10 disabled:opacity-25 cursor-pointer"
+                                  >
+                                    <ArrowDown className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-1 text-center tabular-nums text-blue-50">
+                            {row.pj}
+                          </td>
+                          <td className="py-3 px-1 text-center tabular-nums text-blue-50 hidden sm:table-cell">
+                            {row.g}
+                          </td>
+                          <td className="py-3 px-1 text-center tabular-nums text-blue-50 hidden sm:table-cell">
+                            {row.e}
+                          </td>
+                          <td className="py-3 px-1 text-center tabular-nums text-blue-50 hidden sm:table-cell">
+                            {row.p}
+                          </td>
+                          <td className="py-3 px-1 text-center tabular-nums font-bold text-white">
+                            {row.dg > 0 ? `+${row.dg}` : row.dg}
+                          </td>
+                          <td className="py-3 px-1 text-center tabular-nums text-blue-100/90">
+                            {row.gf}
+                          </td>
+                          <td className="py-3 px-1 text-center tabular-nums text-blue-100/90">
+                            {row.gc}
+                          </td>
+                          <td className="py-3 pl-1 pr-2 text-center font-black tabular-nums text-[#F5CE78]">
+                            {row.pts}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Coin Toss Tie-Break Box (when teams are tied on Pts, DG, GF, GC) */}
+              {tiedGroups.length > 0 && (
+                <div className="rounded-2xl border border-[#D49B35]/55 bg-[#071433]/85 p-3.5 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Coins className="h-4 w-4 text-[#F5CE78]" />
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-[#F5CE78]">
+                        Empate total detectado (Pts · DG · GF · GC)
+                      </span>
+                    </div>
+                    <Badge variant="gold">Definición por Moneda</Badge>
+                  </div>
+
+                  {coinResultMessage && (
+                    <div className="rounded-xl border border-[#F5CE78]/50 bg-[#D49B35]/20 px-3 py-2 text-xs font-bold text-[#F5CE78]">
+                      {coinResultMessage}
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    {tiedGroups.map((group, gIdx) => (
+                      <div
+                        key={gIdx}
+                        className="flex flex-col gap-2 rounded-xl border border-white/10 bg-[#10295E]/70 p-2.5 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="text-xs text-blue-100">
+                          <span className="font-bold text-white">
+                            {group.map((g) => g.teamName).join(" vs. ")}
+                          </span>{" "}
+                          <span className="text-blue-200/75">
+                            ({group[0].pts} pts · DG {group[0].dg} · GF{" "}
+                            {group[0].gf} · GC {group[0].gc})
                           </span>
                         </div>
-                      </td>
-                      <td className="py-3.5 px-1.5 text-center tabular-nums text-blue-50">
-                        {row.pj}
-                      </td>
-                      <td className="py-3.5 px-1.5 text-center tabular-nums text-blue-50">
-                        {row.g}
-                      </td>
-                      <td className="py-3.5 px-1.5 text-center tabular-nums text-blue-50">
-                        {row.e}
-                      </td>
-                      <td className="py-3.5 px-1.5 text-center tabular-nums text-blue-50">
-                        {row.p}
-                      </td>
-                      <td className="py-3.5 px-1.5 text-center tabular-nums text-blue-100/90 hidden sm:table-cell">
-                        {row.gf}
-                      </td>
-                      <td className="py-3.5 px-1.5 text-center tabular-nums text-blue-100/90 hidden sm:table-cell">
-                        {row.gc}
-                      </td>
-                      <td className="py-3.5 px-1.5 text-center tabular-nums font-semibold text-blue-100">
-                        {row.dg > 0 ? `+${row.dg}` : row.dg}
-                      </td>
-                      <td className="py-3.5 pl-1.5 pr-2.5 text-center font-black tabular-nums text-[#F5CE78]">
-                        {row.pts}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                        {isOrganizer && (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              handleFlipCoinForGroup(
+                                group.map((g) => g.teamId)
+                              )
+                            }
+                            className="shrink-0"
+                          >
+                            <Coins className="h-3.5 w-3.5" />
+                            🪙 Tirar Moneda
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Official Qualification & Tie-Breaker Rules */}
+              <div className="rounded-2xl border border-white/12 bg-[#071433]/70 p-3.5 text-xs space-y-1.5">
+                <p className="font-extrabold uppercase tracking-wider text-[#F5CE78]">
+                  Reglamento de Clasificación a Semifinales
+                </p>
+                <p className="text-blue-100/90">
+                  • Clasifican los <strong>primeros 4 equipos</strong> con mayor
+                  puntaje (<strong>Victoria: 3 pts</strong> ·{" "}
+                  <strong>Empate: 1 pt</strong>) →{" "}
+                  <span className="text-[#F5CE78] font-bold">
+                    SEMI 1: 1° vs. 4°
+                  </span>{" "}
+                  y{" "}
+                  <span className="text-[#F5CE78] font-bold">
+                    SEMI 2: 2° vs. 3°
+                  </span>
+                  .
+                </p>
+                <p className="text-blue-100/85">
+                  • <strong>Criterios de desempate en puntos:</strong>{" "}
+                  <strong>1°</strong> Mayor diferencia de gol (DG) ·{" "}
+                  <strong>2°</strong> Goles a favor (GF) ·{" "}
+                  <strong>3°</strong> Menos goles en contra (GC) ·{" "}
+                  <strong>4°</strong> Se tira la moneda 🪙.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* 2. TABLA DE GOLEADORES */}
