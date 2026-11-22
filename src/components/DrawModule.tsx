@@ -479,6 +479,15 @@ export function DrawModule({
     }));
   };
 
+  const handleToggleSubstitute = (playerId: string) => {
+    onUpdateDB((prev) => ({
+      ...prev,
+      players: prev.players.map((p) =>
+        p.id === playerId ? { ...p, isSubstitute: !p.isSubstitute } : p
+      ),
+    }));
+  };
+
   const handleManualAssignPlayer = (playerId: string, targetTeamId: string) => {
     onUpdateDB((prev) => {
       const nextTeams = prev.teams.map((t) => {
@@ -932,8 +941,21 @@ export function DrawModule({
           }
         }
 
+        const reserveIdsSet = new Set<string>();
+        for (const pot of db.draw.pots) {
+          for (const rid of pot.reservePlayerIds ?? []) {
+            reserveIdsSet.add(rid);
+          }
+        }
+
         const activePlayers = db.players
-          .filter((p) => p.convocadoActual)
+          .filter(
+            (p) =>
+              p.convocadoActual ||
+              Boolean(p.isSubstitute) ||
+              reserveIdsSet.has(p.id) ||
+              assignedSet.has(p.id)
+          )
           .sort((a, b) => a.name.localeCompare(b.name, "es"));
 
         const q = manualSearch.trim().toLowerCase();
@@ -1064,27 +1086,53 @@ export function DrawModule({
                           <span className="truncate font-semibold text-white">
                             {p.name}
                           </span>
+                          {(p.isSubstitute || reserveIdsSet.has(p.id)) && (
+                            <span
+                              title="Suplente (juega algunos minutos)"
+                              className="shrink-0 rounded bg-amber-400/25 border border-amber-400/50 px-1 py-0.2 text-[9px] font-black text-amber-200"
+                            >
+                              SUP
+                            </span>
+                          )}
                           {p.stars > 0 && (
                             <span className="shrink-0 text-[#D49B35]">
                               {formatStars(p.stars)}
                             </span>
                           )}
                         </div>
-                        <select
-                          aria-label={`Asignar ${p.name} a un equipo`}
-                          value=""
-                          onChange={(e) =>
-                            handleManualAssignPlayer(p.id, e.target.value)
-                          }
-                          className="rounded-lg border border-white/15 bg-[#0A1B42] px-1.5 py-1 text-[11px] font-semibold text-[#F0C46B] focus:outline-none focus:ring-1 focus:ring-[#D49B35]"
-                        >
-                          <option value="">→ Eq.</option>
-                          {db.teams.map((t, idx) => (
-                            <option key={t.id} value={t.id}>
-                              E{idx + 1} · {t.name}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            title={
+                              p.isSubstitute
+                                ? "Quitar marca de suplente"
+                                : "Marcar como suplente (juega algunos minutos)"
+                            }
+                            onClick={() => handleToggleSubstitute(p.id)}
+                            className={`flex h-6 w-6 items-center justify-center rounded-md border text-[10px] font-black transition cursor-pointer ${
+                              p.isSubstitute
+                                ? "border-amber-300 bg-amber-400 text-[#071433]"
+                                : "border-white/15 bg-white/5 text-blue-200/70 hover:text-amber-200"
+                            }`}
+                          >
+                            S
+                          </button>
+                          <select
+                            aria-label={`Asignar ${p.name} a un equipo`}
+                            value=""
+                            onChange={(e) =>
+                              handleManualAssignPlayer(p.id, e.target.value)
+                            }
+                            className="rounded-lg border border-white/15 bg-[#0A1B42] px-1.5 py-1 text-[11px] font-semibold text-[#F0C46B] focus:outline-none focus:ring-1 focus:ring-[#D49B35]"
+                          >
+                            <option value="">→ Eq.</option>
+                            {db.teams.map((t, idx) => (
+                              <option key={t.id} value={t.id}>
+                                E{idx + 1} · {t.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1196,6 +1244,14 @@ export function DrawModule({
                                     C
                                   </span>
                                 )}
+                                {p.isSubstitute && (
+                                  <span
+                                    title="Suplente (juega algunos minutos)"
+                                    className="shrink-0 rounded bg-amber-400/25 border border-amber-400/50 px-1 py-0.2 text-[9px] font-black text-amber-200"
+                                  >
+                                    SUP
+                                  </span>
+                                )}
                                 {p.stars > 0 && (
                                   <span className="shrink-0 text-[#D49B35]">
                                     {formatStars(p.stars)}
@@ -1203,6 +1259,22 @@ export function DrawModule({
                                 )}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  title={
+                                    p.isSubstitute
+                                      ? "Quitar marca de suplente"
+                                      : "Marcar como suplente (juega algunos minutos)"
+                                  }
+                                  onClick={() => handleToggleSubstitute(p.id)}
+                                  className={`flex h-6 w-6 items-center justify-center rounded-md border text-[10px] font-black transition cursor-pointer ${
+                                    p.isSubstitute
+                                      ? "border-amber-300 bg-amber-400 text-[#071433]"
+                                      : "border-white/15 bg-white/5 text-blue-200/70 hover:text-amber-200"
+                                  }`}
+                                >
+                                  S
+                                </button>
                                 <button
                                   type="button"
                                   title={
@@ -2081,6 +2153,14 @@ export function DrawModule({
                                   CAP
                                 </span>
                               )}
+                              {p.isSubstitute && (
+                                <span
+                                  title="Suplente (juega algunos minutos)"
+                                  className="shrink-0 rounded-md border border-amber-400/50 bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-black text-amber-200"
+                                >
+                                  SUP
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {p.stars > 0 && (
@@ -2092,24 +2172,42 @@ export function DrawModule({
                                 </span>
                               )}
                               {isOrganizer && (
-                                <button
-                                  type="button"
-                                  title={
-                                    isCaptain
-                                      ? "Quitar cinta de capitán"
-                                      : `Designar a ${p.name} como capitán`
-                                  }
-                                  onClick={() =>
-                                    handleToggleCaptain(team.id, p.id)
-                                  }
-                                  className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-black transition active:scale-95 cursor-pointer ${
-                                    isCaptain
-                                      ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
-                                      : "border-white/15 bg-white/6 text-blue-200/75 hover:border-[#D49B35]/60 hover:text-[#F5CE78]"
-                                  }`}
-                                >
-                                  C
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    title={
+                                      p.isSubstitute
+                                        ? "Quitar marca de suplente"
+                                        : `Marcar a ${p.name} como suplente`
+                                    }
+                                    onClick={() => handleToggleSubstitute(p.id)}
+                                    className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-black transition active:scale-95 cursor-pointer ${
+                                      p.isSubstitute
+                                        ? "border-amber-300 bg-amber-400 text-[#071433]"
+                                        : "border-white/15 bg-white/6 text-blue-200/75 hover:border-amber-400/60 hover:text-amber-200"
+                                    }`}
+                                  >
+                                    S
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title={
+                                      isCaptain
+                                        ? "Quitar cinta de capitán"
+                                        : `Designar a ${p.name} como capitán`
+                                    }
+                                    onClick={() =>
+                                      handleToggleCaptain(team.id, p.id)
+                                    }
+                                    className={`flex h-7 w-7 items-center justify-center rounded-lg border text-[11px] font-black transition active:scale-95 cursor-pointer ${
+                                      isCaptain
+                                        ? "border-[#F5CE78] bg-[#D49B35] text-[#071433]"
+                                        : "border-white/15 bg-white/6 text-blue-200/75 hover:border-[#D49B35]/60 hover:text-[#F5CE78]"
+                                    }`}
+                                  >
+                                    C
+                                  </button>
+                                </>
                               )}
                               <button
                                 type="button"

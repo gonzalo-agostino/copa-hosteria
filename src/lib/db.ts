@@ -87,6 +87,8 @@ function normalizeDB(db: TournamentDB): TournamentDB {
       p.goals2024 !== seed.goals2024;
     const needsPositionSync = !p.position && Boolean(seed.position);
     const needsStarsSync = p.id === "p-51" && p.stars === 0 && seed.stars > 0;
+    const needsSubSync =
+      p.isSubstitute === undefined && Boolean(seed.isSubstitute);
     const needsConvocadoSync =
       needsOfficialDrawSync && p.convocadoActual !== seed.convocadoActual;
 
@@ -94,6 +96,7 @@ function normalizeDB(db: TournamentDB): TournamentDB {
       !needsGoalsSync &&
       !needsPositionSync &&
       !needsStarsSync &&
+      !needsSubSync &&
       !needsConvocadoSync
     ) {
       return p;
@@ -106,6 +109,7 @@ function normalizeDB(db: TournamentDB): TournamentDB {
       goals2024: seed.goals2024,
       ...(needsPositionSync ? { position: seed.position } : {}),
       ...(needsStarsSync ? { stars: seed.stars } : {}),
+      ...(needsSubSync ? { isSubstitute: seed.isSubstitute } : {}),
       ...(needsConvocadoSync ? { convocadoActual: seed.convocadoActual } : {}),
     };
   });

@@ -76,7 +76,8 @@ function makePlayer(
   convocadoActual = true,
   goalsEd1 = 0,
   goalsEd2 = 0,
-  position: PlayerPosition = ""
+  position: PlayerPosition = "",
+  isSubstitute = false
 ): Player {
   return {
     id: `p-${String(index).padStart(2, "0")}`,
@@ -91,6 +92,7 @@ function makePlayer(
     yellowCards2025: 0,
     redCards2025: 0,
     convocadoActual,
+    ...(isSubstitute ? { isSubstitute: true } : {}),
   };
 }
 
@@ -119,7 +121,7 @@ export const SEED_PLAYERS: Player[] = [
   makePlayer(21, "Aquito Giudice", 0, 0, true, 0, 4),
   makePlayer(22, "Alan Maimo", 1, 8, true),
   // Suplente / alternativa del Bombo B (no cuenta dentro de los 42 titulares del sorteo)
-  makePlayer(23, "Chicho Margaride", 0, 0, false),
+  makePlayer(23, "Chicho Margaride", 0, 0, false, 0, 0, "", true),
   makePlayer(24, "Fede Martin", 0, 5, true),
   makePlayer(25, "Juancho Mignone", 0, 2, true, 0, 1),
   makePlayer(26, "Franco Ortigosa", 1, 4, true, 0, 3),
@@ -157,7 +159,7 @@ export const SEED_PLAYERS: Player[] = [
   // Nuevo convocado 2026 (Bombo E)
   makePlayer(56, "De Cicco", 0, 0, true),
   // Suplente / alternativa disponible para cualquier bombo (como Chicho)
-  makePlayer(57, "Fabio Aranda", 0, 0, false),
+  makePlayer(57, "Fabio Aranda", 0, 0, false, 0, 0, "", true),
 ];
 
 export const OFFICIAL_DRAW_PRESET_VERSION = "2026-official-7x6-v2";

@@ -33,6 +33,7 @@ export interface Player {
   yellowCards2025: number;
   redCards2025: number;
   convocadoActual: boolean; // true = 42 convocados 2026, false = histórico
+  isSubstitute?: boolean; // true = jugador suplente (juega algunos minutos)
   photoUrl?: string | null;
 }
 

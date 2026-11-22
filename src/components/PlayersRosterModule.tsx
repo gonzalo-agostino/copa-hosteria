@@ -53,6 +53,7 @@ interface PlayerFormState {
   goals2024: number;
   goals2025: number;
   convocadoActual: boolean;
+  isSubstitute: boolean;
 }
 
 async function compressImageToJpeg(file: File, maxSize = 420): Promise<Blob> {
@@ -113,6 +114,7 @@ export function PlayersRosterModule({
     goals2024: 0,
     goals2025: 0,
     convocadoActual: true,
+    isSubstitute: false,
   });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -168,6 +170,7 @@ export function PlayersRosterModule({
       goals2024: 0,
       goals2025: 0,
       convocadoActual: true,
+      isSubstitute: false,
     });
     setFormOpen(true);
   };
@@ -181,6 +184,7 @@ export function PlayersRosterModule({
       goals2024: p.goals2024 ?? 0,
       goals2025: p.goals2025,
       convocadoActual: p.convocadoActual,
+      isSubstitute: Boolean(p.isSubstitute),
     });
     setFormOpen(true);
   };
@@ -202,6 +206,7 @@ export function PlayersRosterModule({
                 goals2024: Math.max(0, Number(form.goals2024) || 0),
                 goals2025: Math.max(0, Number(form.goals2025) || 0),
                 convocadoActual: form.convocadoActual,
+                isSubstitute: form.isSubstitute,
               }
             : p
         );
@@ -260,6 +265,7 @@ export function PlayersRosterModule({
           yellowCards2025: 0,
           redCards2025: 0,
           convocadoActual: form.convocadoActual,
+          isSubstitute: form.isSubstitute,
           photoUrl: null,
         };
 
@@ -515,6 +521,14 @@ export function PlayersRosterModule({
                       )}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-blue-100/80">
+                      {p.isSubstitute && (
+                        <Badge
+                          variant="warning"
+                          className="px-1.5 py-0 text-[10px]"
+                        >
+                          SUP
+                        </Badge>
+                      )}
                       {p.position && (
                         <Badge
                           variant="blue"
@@ -724,6 +738,25 @@ export function PlayersRosterModule({
                   setForm({ ...form, convocadoActual: e.target.checked })
                 }
                 className="h-5 w-5 accent-[#D49B35] cursor-pointer"
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-amber-400/25 bg-amber-500/10 px-3.5 py-3">
+              <div>
+                <p className="text-sm font-bold text-amber-100">
+                  Jugador Suplente (juega algunos minutos)
+                </p>
+                <p className="text-[11px] text-amber-200/75">
+                  Aparece marcado como SUP y disponible para asignar a cualquier equipo en Armado Manual.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={form.isSubstitute}
+                onChange={(e) =>
+                  setForm({ ...form, isSubstitute: e.target.checked })
+                }
+                className="h-5 w-5 accent-amber-400 cursor-pointer"
               />
             </div>
 
