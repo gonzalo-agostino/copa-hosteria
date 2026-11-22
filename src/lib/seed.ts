@@ -158,8 +158,6 @@ export const SEED_PLAYERS: Player[] = [
   makePlayer(55, "Juan Urtasun", 1, 0, false),
   // Nuevo convocado 2026 (Bombo E)
   makePlayer(56, "De Cicco", 0, 0, true),
-  // Suplente / alternativa disponible para cualquier bombo (como Chicho)
-  makePlayer(57, "Fabio Aranda", 0, 0, false, 0, 0, "", true),
 ];
 
 export const OFFICIAL_DRAW_PRESET_VERSION = "2026-official-7x6-v2";
@@ -179,7 +177,7 @@ export function buildOfficialDrawPots(): Pot[] {
       number: 2,
       name: "Bombo B",
       playerIds: ["p-03", "p-30", "p-39", "p-24", "p-42", "p-04", "p-20"],
-      reservePlayerIds: ["p-23", "p-57"], // Chicho Margaride y Fabio Aranda (suplentes disponibles para cualquier bombo)
+      reservePlayerIds: ["p-23"], // Chicho Margaride (suplente / alternativa si falta alguno)
     },
     {
       id: "pot-3",

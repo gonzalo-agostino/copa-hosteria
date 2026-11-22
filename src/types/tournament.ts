@@ -123,6 +123,7 @@ export interface TournamentDB {
   teams: Team[];
   draw: DrawState;
   matches: Match[];
+  deletedPlayerIds?: string[];
   security?: SecurityState;
   updatedAt: string;
 }

@@ -114,8 +114,10 @@ function normalizeDB(db: TournamentDB): TournamentDB {
     };
   });
 
+  const deletedSet = new Set(db.deletedPlayerIds ?? []);
+
   for (const seed of SEED_PLAYERS) {
-    if (!existingIds.has(seed.id)) {
+    if (!existingIds.has(seed.id) && !deletedSet.has(seed.id)) {
       syncedPlayers.push(seed);
       playersChanged = true;
     }
@@ -175,15 +177,6 @@ function normalizeDB(db: TournamentDB): TournamentDB {
           })
         : db.teams;
 
-  const isFabioNewlyAdded = !existingIds.has("p-57");
-  const isFabioInAnyPotOrTeam =
-    (db.draw?.pots ?? []).some(
-      (pot) =>
-        pot.playerIds.includes("p-57") ||
-        (pot.reservePlayerIds ?? []).includes("p-57")
-    ) ||
-    (db.teams ?? []).some((t) => t.playerIds.includes("p-57"));
-
   const nextDraw = needsOfficialDrawSync
     ? {
         teamCount: OFFICIAL_DRAW_TEAM_COUNT,
@@ -195,21 +188,7 @@ function normalizeDB(db: TournamentDB): TournamentDB {
         presetVersion: OFFICIAL_DRAW_PRESET_VERSION,
         lastDrawn: null,
       }
-    : isFabioNewlyAdded && !isFabioInAnyPotOrTeam && db.draw?.pots?.length
-      ? {
-          ...db.draw,
-          pots: db.draw.pots.map((pot, idx) => {
-            const isTarget =
-              pot.id === "pot-2" ||
-              (!db.draw.pots.some((p) => p.id === "pot-2") && idx === 0);
-            if (!isTarget) return pot;
-            return {
-              ...pot,
-              reservePlayerIds: [...(pot.reservePlayerIds ?? []), "p-57"],
-            };
-          }),
-        }
-      : db.draw;
+    : db.draw;
 
   const nextMatches = needsOfficialFixtureSync
     ? generateCopaHosteriaFixture(nextTeams)

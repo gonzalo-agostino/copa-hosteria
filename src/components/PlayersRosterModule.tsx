@@ -295,16 +295,23 @@ export function PlayersRosterModule({
   const handleDeletePlayer = (playerId: string) => {
     onUpdateDB((prev) => ({
       ...prev,
+      deletedPlayerIds: Array.from(
+        new Set([...(prev.deletedPlayerIds ?? []), playerId])
+      ),
       players: prev.players.filter((p) => p.id !== playerId),
       teams: prev.teams.map((t) => ({
         ...t,
         playerIds: t.playerIds.filter((pid) => pid !== playerId),
+        captainId: t.captainId === playerId ? null : t.captainId,
       })),
       draw: {
         ...prev.draw,
         pots: prev.draw.pots.map((pot) => ({
           ...pot,
           playerIds: pot.playerIds.filter((pid) => pid !== playerId),
+          reservePlayerIds: (pot.reservePlayerIds ?? []).filter(
+            (rid) => rid !== playerId
+          ),
         })),
         drawnPlayerIds: prev.draw.drawnPlayerIds.filter(
           (pid) => pid !== playerId
