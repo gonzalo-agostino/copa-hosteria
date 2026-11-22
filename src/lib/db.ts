@@ -171,6 +171,15 @@ function normalizeDB(db: TournamentDB): TournamentDB {
           })
         : db.teams;
 
+  const isFabioNewlyAdded = !existingIds.has("p-57");
+  const isFabioInAnyPotOrTeam =
+    (db.draw?.pots ?? []).some(
+      (pot) =>
+        pot.playerIds.includes("p-57") ||
+        (pot.reservePlayerIds ?? []).includes("p-57")
+    ) ||
+    (db.teams ?? []).some((t) => t.playerIds.includes("p-57"));
+
   const nextDraw = needsOfficialDrawSync
     ? {
         teamCount: OFFICIAL_DRAW_TEAM_COUNT,
@@ -182,7 +191,21 @@ function normalizeDB(db: TournamentDB): TournamentDB {
         presetVersion: OFFICIAL_DRAW_PRESET_VERSION,
         lastDrawn: null,
       }
-    : db.draw;
+    : isFabioNewlyAdded && !isFabioInAnyPotOrTeam && db.draw?.pots?.length
+      ? {
+          ...db.draw,
+          pots: db.draw.pots.map((pot, idx) => {
+            const isTarget =
+              pot.id === "pot-2" ||
+              (!db.draw.pots.some((p) => p.id === "pot-2") && idx === 0);
+            if (!isTarget) return pot;
+            return {
+              ...pot,
+              reservePlayerIds: [...(pot.reservePlayerIds ?? []), "p-57"],
+            };
+          }),
+        }
+      : db.draw;
 
   const nextMatches = needsOfficialFixtureSync
     ? generateCopaHosteriaFixture(nextTeams)
