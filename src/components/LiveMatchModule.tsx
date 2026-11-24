@@ -13,10 +13,10 @@ import {
   FileDown,
   Download,
   Trophy,
-  Swords,
   Minus,
   Dices,
   RotateCcw,
+  Clock,
 } from "lucide-react";
 import {
   Match,
@@ -26,12 +26,8 @@ import {
   TournamentDB,
 } from "@/types/tournament";
 import {
-  calculateStandings,
   clearTournamentResults,
   generateCopaHosteriaFixture,
-  generatePlayoffDirectFinal,
-  generatePlayoffSemifinals,
-  getMatchLoserTeamId,
   getMatchScore,
   getMatchWinnerTeamId,
   simulateTournamentMatches,
@@ -72,12 +68,12 @@ export function LiveMatchModule({
   isOrganizer,
   onUpdateDB,
 }: LiveMatchModuleProps) {
-  const [viewMode, setViewMode] = useState<"liga" | "playoff">("liga");
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [newHomeId, setNewHomeId] = useState<string>(db.teams[0]?.id ?? "");
   const [newAwayId, setNewAwayId] = useState<string>(db.teams[1]?.id ?? "");
   const [newRoundLabel, setNewRoundLabel] = useState("Fecha 1");
+  const [newScheduledTime, setNewScheduledTime] = useState("");
 
   // Live event sheet state
   const [goalModalOpen, setGoalModalOpen] = useState(false);
@@ -178,6 +174,7 @@ export function LiveMatchModule({
       editionId: "ed-2026",
       round: nextRoundNum,
       roundLabel: newRoundLabel.trim() || `Fecha ${nextRoundNum}`,
+      scheduledTime: newScheduledTime.trim() || undefined,
       homeTeamId: newHomeId,
       awayTeamId: newAwayId,
       status: "pendiente",
@@ -188,8 +185,18 @@ export function LiveMatchModule({
       ...prev,
       matches: [...prev.matches, match],
     }));
+    setNewScheduledTime("");
     setCreateOpen(false);
     setSelectedMatchId(match.id);
+  };
+
+  const handleUpdateMatchTime = (matchId: string, scheduledTime: string) => {
+    onUpdateDB((prev) => ({
+      ...prev,
+      matches: prev.matches.map((m) =>
+        m.id === matchId ? { ...m, scheduledTime } : m
+      ),
+    }));
   };
 
   const handleDeleteMatch = (matchId: string) => {
@@ -272,11 +279,6 @@ export function LiveMatchModule({
     });
   };
 
-  const standings = useMemo(
-    () => calculateStandings(db.teams, db.matches),
-    [db.teams, db.matches]
-  );
-
   const playoffMatches = useMemo(
     () =>
       db.matches
@@ -285,93 +287,10 @@ export function LiveMatchModule({
     [db.matches]
   );
 
-  const sf1Match = playoffMatches.find((m) => m.playoffSlot === "sf1") ?? null;
-  const sf2Match = playoffMatches.find((m) => m.playoffSlot === "sf2") ?? null;
-  const thirdMatch =
-    playoffMatches.find((m) => m.playoffSlot === "third") ?? null;
   const finalMatch =
     playoffMatches.find((m) => m.playoffSlot === "final") ?? null;
-
-  const sf1Winner = sf1Match ? getMatchWinnerTeamId(sf1Match) : null;
-  const sf2Winner = sf2Match ? getMatchWinnerTeamId(sf2Match) : null;
-  const sf1Loser = sf1Match ? getMatchLoserTeamId(sf1Match) : null;
-  const sf2Loser = sf2Match ? getMatchLoserTeamId(sf2Match) : null;
   const championTeamId = finalMatch ? getMatchWinnerTeamId(finalMatch) : null;
   const championTeam = championTeamId ? teamMap.get(championTeamId) ?? null : null;
-
-  const handleGenerateSemifinals = () => {
-    const semis = generatePlayoffSemifinals(standings);
-    if (semis.length === 0) return;
-    onUpdateDB((prev) => ({
-      ...prev,
-      matches: [
-        ...prev.matches.filter((m) => m.stage !== "playoff"),
-        ...semis,
-      ],
-    }));
-  };
-
-  const handleGenerateDirectFinal = () => {
-    const directFinal = generatePlayoffDirectFinal(standings);
-    if (!directFinal) return;
-    onUpdateDB((prev) => ({
-      ...prev,
-      matches: [
-        ...prev.matches.filter((m) => m.stage !== "playoff"),
-        directFinal,
-      ],
-    }));
-  };
-
-  const handleGenerateFinalFromSemis = () => {
-    if (!sf1Winner || !sf2Winner) return;
-    const newMatches: Match[] = [];
-
-    if (sf1Loser && sf2Loser && !thirdMatch) {
-      newMatches.push({
-        id: `po-third-${crypto.randomUUID().slice(0, 8)}`,
-        editionId: "ed-2026",
-        round: 101,
-        roundLabel: "3° Puesto",
-        stage: "playoff",
-        playoffSlot: "third",
-        homeTeamId: sf1Loser,
-        awayTeamId: sf2Loser,
-        status: "pendiente",
-        events: [],
-        createdAt: new Date().toISOString(),
-      });
-    }
-
-    if (!finalMatch) {
-      newMatches.push({
-        id: `po-final-${crypto.randomUUID().slice(0, 8)}`,
-        editionId: "ed-2026",
-        round: 102,
-        roundLabel: "Gran Final",
-        stage: "playoff",
-        playoffSlot: "final",
-        homeTeamId: sf1Winner,
-        awayTeamId: sf2Winner,
-        status: "pendiente",
-        events: [],
-        createdAt: new Date().toISOString(),
-      });
-    }
-
-    if (newMatches.length === 0) return;
-    onUpdateDB((prev) => ({
-      ...prev,
-      matches: [...prev.matches, ...newMatches],
-    }));
-  };
-
-  const handleClearPlayoffs = () => {
-    onUpdateDB((prev) => ({
-      ...prev,
-      matches: prev.matches.filter((m) => m.stage !== "playoff"),
-    }));
-  };
 
   const handleClearLeagueMatches = () => {
     onUpdateDB((prev) => ({
@@ -513,6 +432,28 @@ export function LiveMatchModule({
                       {selectedMatch.penaltiesAway ?? 0}
                     </span>
                   )}
+                {isOrganizer ? (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-[#F5CE78]" />
+                    <input
+                      type="text"
+                      aria-label="Horario del partido"
+                      value={selectedMatch.scheduledTime ?? ""}
+                      onChange={(e) =>
+                        handleUpdateMatchTime(selectedMatch.id, e.target.value)
+                      }
+                      placeholder="Ej: 15.30 HS"
+                      className="w-24 rounded-lg border border-[#D49B35]/40 bg-[#071433]/90 px-2 py-0.5 text-center text-xs font-bold text-[#F5CE78] placeholder:text-blue-200/40 focus:border-[#F5CE78] focus:outline-none focus:ring-1 focus:ring-[#F5CE78]"
+                    />
+                  </div>
+                ) : (
+                  selectedMatch.scheduledTime && (
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-bold text-[#F5CE78]">
+                      <Clock className="h-3 w-3" />
+                      {selectedMatch.scheduledTime}
+                    </span>
+                  )
+                )}
               </div>
 
               <div className="flex flex-col items-center gap-2">
@@ -950,326 +891,38 @@ export function LiveMatchModule({
     );
   };
 
-  const renderPlayoffCard = (match: Match, highlight = false) => {
-    const home = teamMap.get(match.homeTeamId);
-    const away = teamMap.get(match.awayTeamId);
-    const isReady = Boolean(home && away);
-    const score = getMatchScore(match);
-    const winnerId = getMatchWinnerTeamId(match);
-    const hasPenalties =
-      match.penaltiesHome != null || match.penaltiesAway != null;
-
-    return (
-      <Card
-        key={match.id}
-        onClick={() => {
-          if (isReady) setSelectedMatchId(match.id);
-        }}
-        className={`transition ${
-          isReady ? "cursor-pointer active:scale-[0.99]" : "opacity-90"
-        } ${
-          highlight
-            ? "border-[#F5CE78]/70 bg-gradient-to-b from-[#173982]/90 to-[#091A42]/95 shadow-lg shadow-[#D49B35]/15"
-            : "border-[#D49B35]/35 hover:border-[#F5CE78]/65"
-        }`}
-      >
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="rounded-lg bg-[#D49B35] px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-[#071433]">
-                {match.roundLabel}
-              </span>
-              {match.scheduledTime && (
-                <span className="text-xs font-extrabold text-[#F5CE78]">
-                  {match.scheduledTime}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Badge
-                variant={
-                  match.status === "en_vivo"
-                    ? "live"
-                    : match.status === "finalizado"
-                      ? "gold"
-                      : "muted"
-                }
-              >
-                {match.status === "en_vivo"
-                  ? "● EN VIVO"
-                  : match.status === "finalizado"
-                    ? "FINAL"
-                    : isReady
-                      ? "PENDIENTE"
-                      : "A DEFINIR"}
-              </Badge>
-              {isOrganizer && (
-                <button
-                  type="button"
-                  aria-label="Eliminar partido"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteMatch(match.id);
-                  }}
-                  className="rounded-lg p-1 text-blue-200/50 hover:bg-red-500/20 hover:text-red-300"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <div className="flex items-center justify-end gap-2 min-w-0">
-              {renderTeamColorName(
-                home,
-                match.homePlaceholder ?? "Local",
-                "right",
-                Boolean(winnerId && winnerId !== match.homeTeamId)
-              )}
-            </div>
-
-            <div className="flex flex-col items-center">
-              <div className="rounded-xl bg-[#071433]/90 px-3 py-1 text-sm sm:text-base font-black tabular-nums text-[#F5CE78]">
-                {match.status === "pendiente" && match.events.length === 0
-                  ? "V."
-                  : `${score.home} - ${score.away}`}
-              </div>
-              {hasPenalties && (
-                <span className="mt-0.5 text-[10px] font-bold text-[#F5CE78]">
-                  ({match.penaltiesHome ?? 0} - {match.penaltiesAway ?? 0} pen.)
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center justify-start gap-2 min-w-0">
-              {renderTeamColorName(
-                away,
-                match.awayPlaceholder ?? "Visitante",
-                "left",
-                Boolean(winnerId && winnerId !== match.awayTeamId)
-              )}
-            </div>
-          </div>
-
-          {winnerId && (
-            <div className="rounded-xl border border-[#D49B35]/35 bg-[#D49B35]/12 px-3 py-1.5 text-center text-xs font-bold text-[#F5CE78]">
-              {match.playoffSlot === "final"
-                ? `🏆 CAMPEÓN: ${teamMap.get(winnerId)?.name}`
-                : match.playoffSlot === "third"
-                  ? `🥉 3° PUESTO: ${teamMap.get(winnerId)?.name}`
-                  : `✓ Clasifica a la Final: ${teamMap.get(winnerId)?.name}`}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
-
   return (
     <div className="space-y-4">
-      {/* Stage Switcher: Fase Liga vs Playoffs (Mata-Mata) */}
-      <div className="grid grid-cols-2 gap-1.5 rounded-2xl border border-white/14 bg-[#071433]/85 p-1.5 shadow-inner shadow-black/20">
-        <button
-          type="button"
-          onClick={() => setViewMode("liga")}
-          className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs sm:text-sm font-bold transition cursor-pointer ${
-            viewMode === "liga"
-              ? "bg-gradient-to-b from-[#E5B049] to-[#C98E29] text-[#071433] shadow-sm shadow-[#D49B35]/25"
-              : "text-blue-100/80 hover:bg-white/8 hover:text-white"
-          }`}
-        >
-          <CalendarPlus className="h-4 w-4 shrink-0" />
-          <span>Fase Liga ({db.matches.filter((m) => m.stage !== "playoff").length})</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode("playoff")}
-          className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs sm:text-sm font-bold transition cursor-pointer ${
-            viewMode === "playoff"
-              ? "bg-gradient-to-b from-[#E5B049] to-[#C98E29] text-[#071433] shadow-sm shadow-[#D49B35]/25"
-              : "text-blue-100/80 hover:bg-white/8 hover:text-white"
-          }`}
-        >
-          <Swords className="h-4 w-4 shrink-0" />
-          <span>Playoffs · Mata-Mata</span>
-        </button>
-      </div>
-
-      {/* PLAYOFFS VIEW */}
-      {viewMode === "playoff" ? (
-        <div className="space-y-4">
-          {/* Champion Banner */}
-          {championTeam && (
-            <Card className="border-[#F5CE78] bg-gradient-to-b from-[#D49B35]/30 via-[#16357A]/90 to-[#071433]/95 shadow-xl shadow-[#D49B35]/20">
-              <CardContent className="flex flex-col items-center p-6 text-center space-y-2.5">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#F5CE78] bg-[#D49B35]/25 text-[#F5CE78] shadow-lg">
-                  <Trophy className="h-9 w-9" />
-                </div>
-                <Badge variant="gold">★ CAMPEÓN 4° EDICIÓN (2026) ★</Badge>
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className="h-5 w-5 rounded-full border-2 border-white"
-                    style={{ backgroundColor: championTeam.color }}
-                  />
-                  <h2 className="text-2xl sm:text-3xl font-black text-white">
-                    {championTeam.name.toUpperCase()}
-                  </h2>
-                </div>
-                {championTeam.playerIds.length > 0 && (
-                  <p className="max-w-md text-xs text-blue-100/85 leading-relaxed">
-                    {championTeam.playerIds
-                      .map((pid) => playerMap.get(pid)?.name)
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Organizer Playoff Generator Controls */}
-          {isOrganizer && playoffMatches.length === 0 && (
-            <Card className="border-[#D49B35]/35">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Swords className="h-4 w-4 text-[#F5CE78]" />
-                  Armar Playoffs Mata-Mata desde la Tabla
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-blue-100/80">
-                  Los cruces se generan automáticamente según las posiciones actuales de la Fase Liga (si empatan en el mata-mata, se define por penales dentro de la planilla).
-                </p>
-
-                {standings.length >= 4 && (
-                  <div className="rounded-xl border border-white/10 bg-[#071433]/75 p-3 text-xs space-y-1">
-                    <p className="font-bold text-[#F5CE78]">
-                      Cruces proyectados (Top 4):
-                    </p>
-                    <p className="text-white/90">
-                      • <strong>Semifinal 1:</strong> 1° {standings[0].teamName}{" "}
-                      vs 4° {standings[3].teamName}
-                    </p>
-                    <p className="text-white/90">
-                      • <strong>Semifinal 2:</strong> 2° {standings[1].teamName}{" "}
-                      vs 3° {standings[2].teamName}
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                  <Button
-                    size="lg"
-                    onClick={handleGenerateSemifinals}
-                    disabled={standings.length < 4}
-                    className="w-full"
-                  >
-                    <Trophy className="h-4 w-4" />
-                    Generar Semifinales (Top 4)
-                  </Button>
-                  <Button
-                    size="lg"
-                    variant="secondary"
-                    onClick={handleGenerateDirectFinal}
-                    disabled={standings.length < 2}
-                    className="w-full"
-                  >
-                    <Swords className="h-4 w-4" />
-                    Generar Final Directa (1° vs 2°)
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Bracket Display */}
-          {playoffMatches.length === 0 ? (
-            !isOrganizer && (
-              <Card className="border-[#D49B35]/30">
-                <CardContent className="flex flex-col items-center py-12 text-center space-y-2.5">
-                  <Trophy className="h-10 w-10 text-[#F5CE78]/80" />
-                  <p className="text-base font-extrabold text-white">
-                    Playoffs Mata-Mata
-                  </p>
-                  <p className="max-w-sm text-xs text-blue-100/75">
-                    Al finalizar la Fase Liga, aquí se mostrarán las Semifinales, el 3° Puesto y la Gran Final de la Copa Hostería.
-                  </p>
-                </CardContent>
-              </Card>
-            )
-          ) : (
-            <div className="space-y-4">
-              {/* Semifinals */}
-              {(sf1Match || sf2Match) && (
-                <div className="space-y-2.5">
-                  <h3 className="px-1 text-xs font-extrabold uppercase tracking-widest text-[#F5CE78]">
-                    Semifinales · Mata-Mata
-                  </h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {sf1Match && renderPlayoffCard(sf1Match)}
-                    {sf2Match && renderPlayoffCard(sf2Match)}
-                  </div>
-                </div>
-              )}
-
-              {/* Button to advance winners to Final & 3rd place */}
-              {isOrganizer &&
-                sf1Winner &&
-                sf2Winner &&
-                (!finalMatch || !thirdMatch) && (
-                  <Button
-                    size="xl"
-                    onClick={handleGenerateFinalFromSemis}
-                    className="w-full"
-                  >
-                    <Trophy className="h-5 w-5" />
-                    Crear Gran Final y 3° Puesto con los clasificados
-                  </Button>
-                )}
-
-              {/* Gran Final & 3rd Place */}
-              {(finalMatch || thirdMatch) && (
-                <div className="space-y-2.5">
-                  <h3 className="px-1 text-xs font-extrabold uppercase tracking-widest text-[#F5CE78]">
-                    Definición del Torneo
-                  </h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {finalMatch && renderPlayoffCard(finalMatch, true)}
-                    {thirdMatch && renderPlayoffCard(thirdMatch)}
-                  </div>
-                </div>
-              )}
-
-              {/* Extra playoff matches if any */}
-              {playoffMatches
-                .filter(
-                  (m) =>
-                    !["sf1", "sf2", "third", "final"].includes(
-                      m.playoffSlot ?? ""
-                    )
-                )
-                .map((m) => renderPlayoffCard(m))}
-
-              {isOrganizer && (
-                <div className="flex justify-end pt-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-red-300 hover:bg-red-500/15 hover:text-red-200"
-                    onClick={handleClearPlayoffs}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Reiniciar Playoffs
-                  </Button>
-                </div>
-              )}
+      {/* Champion Banner when Final finishes */}
+      {championTeam && (
+        <Card className="border-[#F5CE78] bg-gradient-to-b from-[#D49B35]/30 via-[#16357A]/90 to-[#071433]/95 shadow-xl shadow-[#D49B35]/20">
+          <CardContent className="flex flex-col items-center p-6 text-center space-y-2.5">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#F5CE78] bg-[#D49B35]/25 text-[#F5CE78] shadow-lg">
+              <Trophy className="h-9 w-9" />
             </div>
-          )}
-        </div>
-      ) : (
-        <>
-          {isOrganizer && (
+            <Badge variant="gold">★ CAMPEÓN 4° EDICIÓN (2026) ★</Badge>
+            <div className="flex items-center gap-2.5">
+              <span
+                className="h-5 w-5 rounded-full border-2 border-white"
+                style={{ backgroundColor: championTeam.color }}
+              />
+              <h2 className="text-2xl sm:text-3xl font-black text-white">
+                {championTeam.name.toUpperCase()}
+              </h2>
+            </div>
+            {championTeam.playerIds.length > 0 && (
+              <p className="max-w-md text-xs text-blue-100/85 leading-relaxed">
+                {championTeam.playerIds
+                  .map((pid) => playerMap.get(pid)?.name)
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {isOrganizer && (
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               <Button
                 size="lg"
@@ -1329,7 +982,7 @@ export function LiveMatchModule({
               <Button
                 size="lg"
                 variant="secondary"
-                onClick={() => exportTournamentRulesPdf(db.teams)}
+                onClick={() => exportTournamentRulesPdf(db.teams, db.matches)}
                 className="w-full"
               >
                 <FileDown className="h-4 w-4 text-[#F0C46B]" />
@@ -1434,10 +1087,27 @@ export function LiveMatchModule({
                                 {/* Right: Time & Status */}
                                 <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                                   <div className="flex flex-col items-end">
-                                    {match.scheduledTime && (
-                                      <span className="text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78]">
-                                        {match.scheduledTime}
-                                      </span>
+                                    {isOrganizer ? (
+                                      <input
+                                        type="text"
+                                        aria-label={`Horario de ${match.roundLabel}`}
+                                        value={match.scheduledTime ?? ""}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) =>
+                                          handleUpdateMatchTime(
+                                            match.id,
+                                            e.target.value
+                                          )
+                                        }
+                                        placeholder="HH.MM HS"
+                                        className="w-[74px] sm:w-[86px] rounded-lg border border-[#D49B35]/40 bg-[#071433]/90 px-1.5 py-0.5 text-right text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78] placeholder:text-blue-200/40 focus:border-[#F5CE78] focus:outline-none focus:ring-1 focus:ring-[#F5CE78]"
+                                      />
+                                    ) : (
+                                      match.scheduledTime && (
+                                        <span className="text-[11px] sm:text-xs font-black tabular-nums text-[#F5CE78]">
+                                          {match.scheduledTime}
+                                        </span>
+                                      )
                                     )}
                                     {match.status === "finalizado" && (
                                       <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">
@@ -1549,14 +1219,33 @@ export function LiveMatchModule({
                               {/* Right: Time */}
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <div className="flex flex-col items-end">
-                                  {match.scheduledTime && (
-                                    <span
-                                      className={`text-[11px] sm:text-xs font-black tabular-nums ${
+                                  {isOrganizer ? (
+                                    <input
+                                      type="text"
+                                      aria-label={`Horario de ${match.roundLabel}`}
+                                      value={match.scheduledTime ?? ""}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) =>
+                                        handleUpdateMatchTime(
+                                          match.id,
+                                          e.target.value
+                                        )
+                                      }
+                                      placeholder="HH.MM HS"
+                                      className={`w-[74px] sm:w-[86px] rounded-lg border border-[#D49B35]/45 bg-[#071433]/90 px-1.5 py-0.5 text-right text-[11px] sm:text-xs font-black tabular-nums placeholder:text-blue-200/40 focus:border-[#F5CE78] focus:outline-none focus:ring-1 focus:ring-[#F5CE78] ${
                                         isFinal ? "text-white" : "text-[#F5CE78]"
                                       }`}
-                                    >
-                                      {match.scheduledTime}
-                                    </span>
+                                    />
+                                  ) : (
+                                    match.scheduledTime && (
+                                      <span
+                                        className={`text-[11px] sm:text-xs font-black tabular-nums ${
+                                          isFinal ? "text-white" : "text-[#F5CE78]"
+                                        }`}
+                                      >
+                                        {match.scheduledTime}
+                                      </span>
+                                    )
                                   )}
                                   {match.status === "finalizado" && (
                                     <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">
@@ -1599,8 +1288,6 @@ export function LiveMatchModule({
               </Button>
             </div>
           )}
-        </>
-      )}
 
       {/* Create Custom Match Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -1624,6 +1311,17 @@ export function LiveMatchModule({
                 value={newRoundLabel}
                 onChange={(e) => setNewRoundLabel(e.target.value)}
                 placeholder="Ej: Fecha 1, Semifinal, Final"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-blue-200">
+                Horario (opcional)
+              </label>
+              <Input
+                value={newScheduledTime}
+                onChange={(e) => setNewScheduledTime(e.target.value)}
+                placeholder="Ej: 16.30 HS"
               />
             </div>
 

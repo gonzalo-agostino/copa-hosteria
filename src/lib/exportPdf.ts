@@ -514,10 +514,21 @@ export async function exportFullFixturePdf(
   doc.save("copa-hosteria-2026-planillas-partidos.pdf");
 }
 
-export async function exportTournamentRulesPdf(teams: Team[] = []) {
+export async function exportTournamentRulesPdf(
+  teams: Team[] = [],
+  matches: Match[] = []
+) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const logoDataUrl = await fetchLogoDataUrl();
   const pageW = doc.internal.pageSize.getWidth();
+  const timeByLabel = new Map<string, string>();
+  for (const m of matches) {
+    if (m.roundLabel && m.scheduledTime) {
+      timeByLabel.set(m.roundLabel.toUpperCase(), m.scheduledTime);
+    }
+  }
+  const getTime = (label: string, fallback: string) =>
+    timeByLabel.get(label.toUpperCase()) ?? fallback;
 
   drawHeader(
     doc,
@@ -593,13 +604,13 @@ export async function exportTournamentRulesPdf(teams: Team[] = []) {
 
   // Compact 7-match schedule box
   const schedItems = [
-    ["F1", "15:30 hs", `${teamName(0)}  vs.  ${teamName(3)}`],
-    ["F2", "16:00 hs", `${teamName(1)}  vs.  ${teamName(6)}`],
-    ["F3", "16:40 hs", `${teamName(4)}  vs.  ${teamName(2)}`],
-    ["F4", "17:20 hs", `${teamName(5)}  vs.  ${teamName(0)}`],
-    ["F5", "18:00 hs", `${teamName(3)}  vs.  ${teamName(1)}`],
-    ["F6", "18:40 hs", `${teamName(6)}  vs.  ${teamName(4)}`],
-    ["F7", "19:20 hs", `${teamName(2)}  vs.  ${teamName(5)}`],
+    ["F1", getTime("F1", "15:30 hs"), `${teamName(0)}  vs.  ${teamName(3)}`],
+    ["F2", getTime("F2", "16:00 hs"), `${teamName(1)}  vs.  ${teamName(6)}`],
+    ["F3", getTime("F3", "16:40 hs"), `${teamName(4)}  vs.  ${teamName(2)}`],
+    ["F4", getTime("F4", "17:20 hs"), `${teamName(5)}  vs.  ${teamName(0)}`],
+    ["F5", getTime("F5", "18:00 hs"), `${teamName(3)}  vs.  ${teamName(1)}`],
+    ["F6", getTime("F6", "18:40 hs"), `${teamName(6)}  vs.  ${teamName(4)}`],
+    ["F7", getTime("F7", "19:20 hs"), `${teamName(2)}  vs.  ${teamName(5)}`],
   ];
 
   const boxH = 7 + schedItems.length * 6;
@@ -685,15 +696,15 @@ export async function exportTournamentRulesPdf(teams: Team[] = []) {
   // SECTION 4: FASE FINAL (SEMIFINALES Y FINAL)
   drawSectionHeader("4", "Fase Final (Semifinales y Gran Final)");
   drawBullet(
-    "SEMI 1 (20:00 HS):",
+    `SEMI 1 (${getTime("SEMI 1", "20:00 HS").toUpperCase()}):`,
     "1° Zona  vs.  4° Zona  (eliminación directa a un partido)."
   );
   drawBullet(
-    "SEMI 2 (20:40 HS):",
+    `SEMI 2 (${getTime("SEMI 2", "20:40 HS").toUpperCase()}):`,
     "2° Zona  vs.  3° Zona  (eliminación directa a un partido)."
   );
   drawBullet(
-    "GRAN FINAL (21:30 HS):",
+    `GRAN FINAL (${getTime("FINAL", "21:30 HS").toUpperCase()}):`,
     "Ganador SEMI 1  vs.  Ganador SEMI 2."
   );
   drawBullet(
