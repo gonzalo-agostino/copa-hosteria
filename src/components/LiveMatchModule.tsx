@@ -114,6 +114,7 @@ export function LiveMatchModule({
                 color: existing?.color ?? preset.color,
                 playerIds: existing?.playerIds ?? [],
                 captainId: existing?.captainId ?? null,
+                dtId: existing?.dtId ?? null,
                 maxPlayers: existing?.maxPlayers ?? OFFICIAL_PLAYERS_PER_TEAM,
               };
             });
@@ -140,6 +141,7 @@ export function LiveMatchModule({
                 color: existing?.color ?? preset.color,
                 playerIds: existing?.playerIds ?? [],
                 captainId: existing?.captainId ?? null,
+                dtId: existing?.dtId ?? null,
                 maxPlayers: existing?.maxPlayers ?? OFFICIAL_PLAYERS_PER_TEAM,
               };
             });

@@ -34,6 +34,7 @@ export interface Player {
   redCards2025: number;
   convocadoActual: boolean; // true = 42 convocados 2026, false = histórico
   isSubstitute?: boolean; // true = jugador suplente (juega algunos minutos)
+  isDT?: boolean; // true = Director Técnico (DT)
   photoUrl?: string | null;
 }
 
@@ -44,6 +45,7 @@ export interface Team {
   color: string; // hex color for jersey/badge
   playerIds: string[];
   captainId?: string | null;
+  dtId?: string | null;
   maxPlayers?: number;
   tiebreakOrder?: number;
 }

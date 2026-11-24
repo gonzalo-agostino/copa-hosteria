@@ -12,6 +12,7 @@ import {
   Pencil,
   UserPlus,
   Download,
+  ClipboardList,
 } from "lucide-react";
 import { Player, PlayerPosition, Team, TournamentDB } from "@/types/tournament";
 import { formatStars } from "@/lib/utils";
@@ -54,6 +55,7 @@ interface PlayerFormState {
   goals2025: number;
   convocadoActual: boolean;
   isSubstitute: boolean;
+  isDT: boolean;
 }
 
 async function compressImageToJpeg(file: File, maxSize = 420): Promise<Blob> {
@@ -101,7 +103,7 @@ export function PlayersRosterModule({
 }: PlayersRosterModuleProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<
-    "convocados" | "campeones" | "historicos"
+    "convocados" | "dts" | "campeones" | "historicos"
   >("convocados");
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -115,6 +117,7 @@ export function PlayersRosterModule({
     goals2025: 0,
     convocadoActual: true,
     isSubstitute: false,
+    isDT: false,
   });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -130,17 +133,33 @@ export function PlayersRosterModule({
     return map;
   }, [db.teams]);
 
+  const dtTeamByPlayer = useMemo(() => {
+    const map = new Map<string, Team>();
+    for (const t of db.teams) {
+      if (t.dtId) {
+        map.set(t.dtId, t);
+      }
+    }
+    return map;
+  }, [db.teams]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return db.players
       .filter((p) => {
         if (filter === "convocados" && !p.convocadoActual) return false;
+        if (filter === "dts" && !p.isDT) return false;
         if (filter === "campeones" && p.stars === 0) return false;
         if (filter === "historicos" && p.convocadoActual) return false;
         if (q) {
           const matchesName = p.name.toLowerCase().includes(q);
           const matchesPos = (p.position ?? "").toLowerCase().includes(q);
-          if (!matchesName && !matchesPos) return false;
+          const matchesDT =
+            Boolean(p.isDT) &&
+            (q === "dt" ||
+              "director tecnico".includes(q) ||
+              "director técnico".includes(q));
+          if (!matchesName && !matchesPos && !matchesDT) return false;
         }
         return true;
       })
@@ -157,6 +176,7 @@ export function PlayersRosterModule({
   }, [db.players, filter, query]);
 
   const convocadosCount = db.players.filter((p) => p.convocadoActual).length;
+  const dtsCount = db.players.filter((p) => Boolean(p.isDT)).length;
   const campeonesCount = db.players.filter((p) => p.stars > 0).length;
   const historicosCount = db.players.filter((p) => !p.convocadoActual).length;
   const photosLoadedCount = db.players.filter((p) => Boolean(p.photoUrl)).length;
@@ -169,8 +189,9 @@ export function PlayersRosterModule({
       stars: 0,
       goals2024: 0,
       goals2025: 0,
-      convocadoActual: true,
+      convocadoActual: filter !== "dts",
       isSubstitute: false,
+      isDT: filter === "dts",
     });
     setFormOpen(true);
   };
@@ -185,8 +206,27 @@ export function PlayersRosterModule({
       goals2025: p.goals2025,
       convocadoActual: p.convocadoActual,
       isSubstitute: Boolean(p.isSubstitute),
+      isDT: Boolean(p.isDT),
     });
     setFormOpen(true);
+  };
+
+  const handleToggleDT = (playerId: string) => {
+    onUpdateDB((prev) => {
+      const target = prev.players.find((p) => p.id === playerId);
+      const nextIsDT = !target?.isDT;
+      return {
+        ...prev,
+        players: prev.players.map((p) =>
+          p.id === playerId ? { ...p, isDT: nextIsDT } : p
+        ),
+        teams: nextIsDT
+          ? prev.teams
+          : prev.teams.map((t) =>
+              t.dtId === playerId ? { ...t, dtId: null } : t
+            ),
+      };
+    });
   };
 
   const handleSavePlayer = () => {
@@ -207,6 +247,7 @@ export function PlayersRosterModule({
                 goals2025: Math.max(0, Number(form.goals2025) || 0),
                 convocadoActual: form.convocadoActual,
                 isSubstitute: form.isSubstitute,
+                isDT: form.isDT,
               }
             : p
         );
@@ -215,6 +256,12 @@ export function PlayersRosterModule({
         let nextPots = prev.draw.pots;
         let nextTeams = prev.teams;
         let nextDrawnIds = prev.draw.drawnPlayerIds;
+
+        if (!form.isDT) {
+          nextTeams = nextTeams.map((t) =>
+            t.dtId === form.id ? { ...t, dtId: null } : t
+          );
+        }
 
         if (prevPlayer && prevPlayer.convocadoActual !== form.convocadoActual) {
           if (form.convocadoActual) {
@@ -266,6 +313,7 @@ export function PlayersRosterModule({
           redCards2025: 0,
           convocadoActual: form.convocadoActual,
           isSubstitute: form.isSubstitute,
+          isDT: form.isDT,
           photoUrl: null,
         };
 
@@ -303,6 +351,7 @@ export function PlayersRosterModule({
         ...t,
         playerIds: t.playerIds.filter((pid) => pid !== playerId),
         captainId: t.captainId === playerId ? null : t.captainId,
+        dtId: t.dtId === playerId ? null : t.dtId,
       })),
       draw: {
         ...prev.draw,
@@ -443,7 +492,7 @@ export function PlayersRosterModule({
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-white/14 bg-[#071433]/85 p-1.5 shadow-inner shadow-black/20">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 rounded-2xl border border-white/14 bg-[#071433]/85 p-1.5 shadow-inner shadow-black/20">
         <button
           type="button"
           onClick={() => setFilter("convocados")}
@@ -455,6 +504,18 @@ export function PlayersRosterModule({
         >
           <Users className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">2026 ({convocadosCount})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter("dts")}
+          className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-2 text-xs sm:text-sm font-bold transition cursor-pointer ${
+            filter === "dts"
+              ? "bg-gradient-to-b from-[#E5B049] to-[#C98E29] text-[#071433] shadow-sm shadow-[#D49B35]/25"
+              : "text-blue-100/80 hover:bg-white/8 hover:text-white"
+          }`}
+        >
+          <ClipboardList className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">DTs ({dtsCount})</span>
         </button>
         <button
           type="button"
@@ -481,9 +542,20 @@ export function PlayersRosterModule({
         </button>
       </div>
 
+      {filtered.length === 0 && (
+        <Card className="border-white/10">
+          <CardContent className="py-8 text-center text-xs text-blue-200/70">
+            {filter === "dts"
+              ? "Todavía no hay DTs tildados en el padrón. Activá el botón DT en cualquier persona o agregá uno nuevo."
+              : "No se encontraron personas con ese filtro."}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-2.5 sm:grid-cols-2">
         {filtered.map((p) => {
           const team = teamByPlayer.get(p.id);
+          const dtTeam = dtTeamByPlayer.get(p.id);
           const isBusy = uploadingId === p.id;
           return (
             <Card
@@ -528,6 +600,14 @@ export function PlayersRosterModule({
                       )}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-blue-100/80">
+                      {p.isDT && (
+                        <Badge
+                          variant="live"
+                          className="px-1.5 py-0 text-[10px]"
+                        >
+                          DT
+                        </Badge>
+                      )}
                       {p.isSubstitute && (
                         <Badge
                           variant="warning"
@@ -544,7 +624,16 @@ export function PlayersRosterModule({
                           {p.position}
                         </Badge>
                       )}
-                      {team ? (
+                      {dtTeam && (
+                        <span className="inline-flex items-center gap-1 font-semibold text-emerald-200">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full border border-white/80"
+                            style={{ backgroundColor: dtTeam.color }}
+                          />
+                          DT · {dtTeam.name}
+                        </span>
+                      )}
+                      {team && team.id !== dtTeam?.id ? (
                         <span className="inline-flex items-center gap-1 font-medium text-white/90">
                           <span
                             className="h-2.5 w-2.5 rounded-full border border-white/80"
@@ -552,15 +641,21 @@ export function PlayersRosterModule({
                           />
                           {team.name}
                         </span>
-                      ) : p.convocadoActual ? (
-                        <span>Convocado 2026</span>
-                      ) : (
-                        <span className="text-[#F5CE78]/90">
-                          {(p.goals2024 ?? 0) > 0 && p.goals2025 === 0
-                            ? "Histórico 2024"
-                            : "Histórico 2025"}
-                        </span>
-                      )}
+                      ) : !team && !dtTeam ? (
+                        p.convocadoActual ? (
+                          <span>Convocado 2026</span>
+                        ) : p.isDT ? (
+                          <span className="text-emerald-200/85">
+                            DT disponible
+                          </span>
+                        ) : (
+                          <span className="text-[#F5CE78]/90">
+                            {(p.goals2024 ?? 0) > 0 && p.goals2025 === 0
+                              ? "Histórico 2024"
+                              : "Histórico 2025"}
+                          </span>
+                        )
+                      ) : null}
                       {(p.goals2024 ?? 0) > 0 && (
                         <Badge
                           variant="gold"
@@ -588,7 +683,11 @@ export function PlayersRosterModule({
                       const pot = db.draw.pots.find((pt) =>
                         pt.playerIds.includes(p.id)
                       );
-                      downloadPlayerCardPng(p, team ?? null, pot?.number ?? null);
+                      downloadPlayerCardPng(
+                        p,
+                        team ?? dtTeam ?? null,
+                        pot?.number ?? null
+                      );
                     }}
                     title="Descargar tarjeta PNG del jugador"
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-blue-100 transition active:scale-95 hover:border-[#D49B35]/60 hover:bg-[#D49B35]/20 hover:text-[#F5CE78] cursor-pointer"
@@ -597,6 +696,23 @@ export function PlayersRosterModule({
                   </button>
                   {isOrganizer && (
                     <>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleToggleDT(p.id)}
+                        title={
+                          p.isDT
+                            ? "Quitar marca de DT"
+                            : "Tildar como Director Técnico (DT)"
+                        }
+                        className={`flex h-9 px-2 items-center justify-center rounded-xl border text-[11px] font-black transition active:scale-95 cursor-pointer ${
+                          p.isDT
+                            ? "border-emerald-400 bg-emerald-500 text-[#071433]"
+                            : "border-white/15 bg-white/8 text-blue-200/80 hover:border-emerald-400/60 hover:text-emerald-200"
+                        }`}
+                      >
+                        DT
+                      </button>
                       <button
                         type="button"
                         disabled={isBusy}
@@ -764,6 +880,25 @@ export function PlayersRosterModule({
                   setForm({ ...form, isSubstitute: e.target.checked })
                 }
                 className="h-5 w-5 accent-amber-400 cursor-pointer"
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-3">
+              <div>
+                <p className="text-sm font-bold text-emerald-100">
+                  Director Técnico (DT)
+                </p>
+                <p className="text-[11px] text-emerald-200/75">
+                  Habilita para asignarlo como DT de un equipo. Si solo dirige y no juega, destildá Convocado 2026.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={form.isDT}
+                onChange={(e) =>
+                  setForm({ ...form, isDT: e.target.checked })
+                }
+                className="h-5 w-5 accent-emerald-400 cursor-pointer"
               />
             </div>
 

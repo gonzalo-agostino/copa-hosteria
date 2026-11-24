@@ -11,6 +11,10 @@ export function buildWhatsAppTeamsText(teams: Team[], players: Player[]): string
 
   teams.forEach((team, idx) => {
     lines.push(`🔷 *${idx + 1}. ${team.name.toUpperCase()}*`);
+    const dtPlayer = team.dtId ? playerMap.get(team.dtId) : undefined;
+    if (dtPlayer) {
+      lines.push(`   📋 *DT:* ${dtPlayer.name}`);
+    }
     if (team.playerIds.length === 0) {
       lines.push("   _(Sin jugadores asignados)_");
     } else {
@@ -18,8 +22,9 @@ export function buildWhatsAppTeamsText(teams: Team[], players: Player[]): string
         const p = playerMap.get(pid);
         if (!p) return;
         const cap = team.captainId === pid ? " (C)" : "";
+        const dtTag = team.dtId === pid ? " (DT)" : "";
         const stars = p.stars > 0 ? ` ${"★".repeat(p.stars)}` : "";
-        lines.push(`   • ${p.name}${cap}${stars}`);
+        lines.push(`   • ${p.name}${cap}${dtTag}${stars}`);
       });
     }
     lines.push("");
@@ -67,6 +72,7 @@ export async function downloadTeamsPosterPng(teams: Team[], players: Player[]) {
   const cols = 2;
   const rows = Math.ceil(teams.length / cols);
   const maxPlayers = Math.max(7, ...teams.map((t) => t.playerIds.length));
+  const hasAnyDT = teams.some((t) => Boolean(t.dtId && playerMap.has(t.dtId)));
 
   const width = 1080;
   const headerH = 260;
@@ -74,7 +80,8 @@ export async function downloadTeamsPosterPng(teams: Team[], players: Player[]) {
   const cardGap = 28;
   const padX = 48;
   const cardW = (width - padX * 2 - cardGap) / cols;
-  const cardH = 82 + maxPlayers * 40 + 22;
+  const dtRowH = hasAnyDT ? 36 : 0;
+  const cardH = 82 + dtRowH + maxPlayers * 40 + 22;
   const height = headerH + rows * cardH + (rows - 1) * cardGap + footerH + 36;
 
   const canvas = document.createElement("canvas");
@@ -193,11 +200,20 @@ export async function downloadTeamsPosterPng(teams: Team[], players: Player[]) {
     ctx.textAlign = "left";
     ctx.fillText(team.name.toUpperCase(), x + 60, y + 42);
 
+    // DT line if assigned
+    const dtPlayer = team.dtId ? playerMap.get(team.dtId) : undefined;
+    if (dtPlayer) {
+      ctx.fillStyle = "#6EE7B7";
+      ctx.font = "700 18px system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(`DT: ${dtPlayer.name}`, x + 22, y + 92);
+    }
+
     // Players list
     team.playerIds.forEach((pid, pIdx) => {
       const p = playerMap.get(pid);
       if (!p) return;
-      const py = y + 98 + pIdx * 40;
+      const py = y + 98 + dtRowH + pIdx * 40;
 
       // Number circle
       ctx.fillStyle = "rgba(212, 155, 53, 0.22)";
@@ -460,11 +476,22 @@ export async function downloadPlayerCardPng(
     ctx.stroke();
 
     const isCaptain = team.captainId === player.id;
+    const isTeamDT = team.dtId === player.id;
     ctx.textAlign = "left";
-    ctx.fillStyle = isCaptain ? "#F5CE78" : "rgba(219, 234, 254, 0.78)";
+    ctx.fillStyle = isCaptain
+      ? "#F5CE78"
+      : isTeamDT
+        ? "#6EE7B7"
+        : "rgba(219, 234, 254, 0.78)";
     ctx.font = "700 18px system-ui, -apple-system, sans-serif";
     ctx.fillText(
-      isCaptain ? "© CAPITÁN DEL EQUIPO" : "EQUIPO ASIGNADO",
+      isCaptain && isTeamDT
+        ? "© CAPITÁN Y DT DEL EQUIPO"
+        : isTeamDT
+          ? "DT · DIRECTOR TÉCNICO"
+          : isCaptain
+            ? "© CAPITÁN DEL EQUIPO"
+            : "EQUIPO ASIGNADO",
       tX + 98,
       teamBoxY + 34
     );
@@ -710,6 +737,7 @@ export async function downloadSingleTeamCardPng(
 
   // Squad aggregate stats row inside banner
   const totalStars = teamPlayers.reduce((sum, p) => sum + p.stars, 0);
+  const dtPlayer = team.dtId ? playerMap.get(team.dtId) : undefined;
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
   drawRoundedRect(ctx, bannerX + 24, bannerY + 126, bannerW - 48, 44, 14);
@@ -718,11 +746,10 @@ export async function downloadSingleTeamCardPng(
   ctx.fillStyle = "#E2E8F0";
   ctx.font = "700 20px system-ui, -apple-system, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(
-    `${teamPlayers.length} JUGADORES    ·    ★ ${totalStars} ${totalStars === 1 ? "TÍTULO" : "TÍTULOS"} DE CAMPEÓN EN PLANTEL`,
-    width / 2,
-    bannerY + 155
-  );
+  const bannerSummary = dtPlayer
+    ? `DT: ${dtPlayer.name.toUpperCase()}    ·    ${teamPlayers.length} JUG.    ·    ★ ${totalStars} ${totalStars === 1 ? "TÍTULO" : "TÍTULOS"}`
+    : `${teamPlayers.length} JUGADORES    ·    ★ ${totalStars} ${totalStars === 1 ? "TÍTULO" : "TÍTULOS"} DE CAMPEÓN EN PLANTEL`;
+  ctx.fillText(bannerSummary, width / 2, bannerY + 155);
 
   // Players list rows
   teamPlayers.forEach((p, idx) => {

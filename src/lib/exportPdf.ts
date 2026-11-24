@@ -88,12 +88,21 @@ function drawTeamRosterTable(
   const headerH = 8;
 
   // Team title bar
+  const dtPlayer = team.dtId ? playerMap.get(team.dtId) : undefined;
   doc.setFillColor(...NAVY);
   doc.rect(x, y, w, headerH, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.text(team.name.toUpperCase(), x + 3, y + 5.4);
+  if (dtPlayer) {
+    doc.setTextColor(240, 196, 107);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text(`DT: ${dtPlayer.name}`.slice(0, 26), x + w - 3, y + 5.3, {
+      align: "right",
+    });
+  }
 
   // Column headers
   const colHeaderY = y + headerH;

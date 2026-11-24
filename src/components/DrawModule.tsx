@@ -138,6 +138,24 @@ export function DrawModule({
     [db.players]
   );
 
+  const { dtTaggedPlayers, nonDtPlayers } = useMemo(() => {
+    const sorted = [...db.players].sort((a, b) =>
+      a.name.localeCompare(b.name, "es")
+    );
+    return {
+      dtTaggedPlayers: sorted.filter((p) => Boolean(p.isDT)),
+      nonDtPlayers: sorted.filter((p) => !p.isDT),
+    };
+  }, [db.players]);
+
+  const dtTeamByPlayerId = useMemo(() => {
+    const map = new Map<string, Team>();
+    for (const t of db.teams) {
+      if (t.dtId) map.set(t.dtId, t);
+    }
+    return map;
+  }, [db.teams]);
+
   const activePlayersCount = useMemo(
     () => db.players.filter((p) => p.convocadoActual).length,
     [db.players]
@@ -203,6 +221,7 @@ export function DrawModule({
           name: existing?.name ?? preset.name,
           color: existing?.color ?? preset.color,
           playerIds: [],
+          dtId: existing?.dtId ?? null,
         };
       });
 
@@ -262,6 +281,7 @@ export function DrawModule({
             color: existing?.color ?? preset.color,
             playerIds: [],
             captainId: null,
+            dtId: existing?.dtId ?? null,
             maxPlayers: OFFICIAL_PLAYERS_PER_TEAM,
           };
         }
@@ -476,6 +496,27 @@ export function DrawModule({
           ? { ...t, captainId: t.captainId === playerId ? null : playerId }
           : t
       ),
+    }));
+  };
+
+  const handleSetTeamDT = (teamId: string, dtId: string | null) => {
+    const normalizedId = dtId || null;
+    onUpdateDB((prev) => ({
+      ...prev,
+      players: normalizedId
+        ? prev.players.map((p) =>
+            p.id === normalizedId && !p.isDT ? { ...p, isDT: true } : p
+          )
+        : prev.players,
+      teams: prev.teams.map((t) => {
+        if (t.id === teamId) {
+          return { ...t, dtId: normalizedId };
+        }
+        if (normalizedId && t.dtId === normalizedId) {
+          return { ...t, dtId: null };
+        }
+        return t;
+      }),
     }));
   };
 
@@ -1206,6 +1247,49 @@ export function DrawModule({
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1.5 min-h-[120px]">
+                      {/* DT Selector in Manual View */}
+                      <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1.5 text-xs">
+                        <span className="shrink-0 font-extrabold text-emerald-200">
+                          DT
+                        </span>
+                        <select
+                          aria-label={`DT de ${team.name}`}
+                          value={team.dtId ?? ""}
+                          onChange={(e) =>
+                            handleSetTeamDT(team.id, e.target.value || null)
+                          }
+                          className="min-w-0 flex-1 rounded-lg border border-emerald-400/35 bg-[#0A1B42] px-2 py-1 text-[11px] font-semibold text-white focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                        >
+                          <option value="">Sin DT asignado</option>
+                          {dtTaggedPlayers.length > 0 && (
+                            <optgroup label="DTs del Padrón">
+                              {dtTaggedPlayers.map((dt) => {
+                                const assignedTeam = dtTeamByPlayerId.get(dt.id);
+                                const suffix =
+                                  assignedTeam && assignedTeam.id !== team.id
+                                    ? ` (${assignedTeam.name})`
+                                    : "";
+                                return (
+                                  <option key={dt.id} value={dt.id}>
+                                    {dt.name}
+                                    {suffix}
+                                  </option>
+                                );
+                              })}
+                            </optgroup>
+                          )}
+                          {nonDtPlayers.length > 0 && (
+                            <optgroup label="Otros del Padrón">
+                              {nonDtPlayers.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
+                      </div>
+
                       {teamPlayers.length === 0 ? (
                         <div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-3 text-center text-xs text-blue-200/55">
                           Arrastrá jugadores acá
@@ -1444,6 +1528,47 @@ export function DrawModule({
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-1.5">
+                    <span className="shrink-0 text-xs font-bold text-emerald-200">
+                      DT del equipo
+                    </span>
+                    <select
+                      aria-label={`Director Técnico de ${team.name}`}
+                      value={team.dtId ?? ""}
+                      onChange={(e) =>
+                        handleSetTeamDT(team.id, e.target.value || null)
+                      }
+                      className="min-w-0 max-w-[65%] rounded-lg border border-emerald-400/35 bg-[#0A1B42] px-2 py-1 text-xs font-semibold text-white focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                    >
+                      <option value="">Sin DT asignado</option>
+                      {dtTaggedPlayers.length > 0 && (
+                        <optgroup label="DTs del Padrón">
+                          {dtTaggedPlayers.map((dt) => {
+                            const assignedTeam = dtTeamByPlayerId.get(dt.id);
+                            const suffix =
+                              assignedTeam && assignedTeam.id !== team.id
+                                ? ` (${assignedTeam.name})`
+                                : "";
+                            return (
+                              <option key={dt.id} value={dt.id}>
+                                {dt.name}
+                                {suffix}
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+                      )}
+                      {nonDtPlayers.length > 0 && (
+                        <optgroup label="Otros del Padrón">
+                          {nonDtPlayers.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {TEAM_COLOR_PRESETS.map((preset) => (
@@ -2114,6 +2239,86 @@ export function DrawModule({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-1.5">
+                    {/* DT Row (always visible if assigned; editable by organizer) */}
+                    {(() => {
+                      const dtPlayer = team.dtId
+                        ? playerMap.get(team.dtId)
+                        : undefined;
+                      if (!dtPlayer && !isOrganizer) return null;
+                      return (
+                        <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-emerald-400/35 bg-emerald-500/12 px-3 py-2 text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {dtPlayer ? (
+                              <>
+                                <PlayerAvatar
+                                  name={dtPlayer.name}
+                                  photoUrl={dtPlayer.photoUrl}
+                                  stars={dtPlayer.stars}
+                                  size="xs"
+                                />
+                                <span className="shrink-0 rounded-md bg-emerald-400 px-1.5 py-0.5 text-[10px] font-black text-[#071433]">
+                                  DT
+                                </span>
+                                <span className="truncate font-bold text-emerald-100">
+                                  {dtPlayer.name}
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="shrink-0 rounded-md border border-emerald-400/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-black text-emerald-200">
+                                  DT
+                                </span>
+                                <span className="truncate text-emerald-100/70">
+                                  Sin DT asignado
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          {isOrganizer && (
+                            <select
+                              aria-label={`Elegir DT para ${team.name}`}
+                              value={team.dtId ?? ""}
+                              onChange={(e) =>
+                                handleSetTeamDT(team.id, e.target.value || null)
+                              }
+                              className="max-w-[130px] shrink-0 rounded-lg border border-emerald-400/40 bg-[#0A1B42] px-1.5 py-1 text-[11px] font-semibold text-emerald-200 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                            >
+                              <option value="">Sin DT</option>
+                              {dtTaggedPlayers.length > 0 && (
+                                <optgroup label="DTs del Padrón">
+                                  {dtTaggedPlayers.map((dt) => {
+                                    const assignedTeam = dtTeamByPlayerId.get(
+                                      dt.id
+                                    );
+                                    const suffix =
+                                      assignedTeam &&
+                                      assignedTeam.id !== team.id
+                                        ? ` (${assignedTeam.name})`
+                                        : "";
+                                    return (
+                                      <option key={dt.id} value={dt.id}>
+                                        {dt.name}
+                                        {suffix}
+                                      </option>
+                                    );
+                                  })}
+                                </optgroup>
+                              )}
+                              {nonDtPlayers.length > 0 && (
+                                <optgroup label="Otros del Padrón">
+                                  {nonDtPlayers.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     {team.playerIds.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-white/14 bg-white/[0.03] py-6 text-center text-xs font-medium text-blue-100/70">
                         Esperando bolillas...
@@ -2151,6 +2356,14 @@ export function DrawModule({
                                   className="shrink-0 rounded-md bg-gradient-to-b from-[#F5CE78] to-[#D49B35] px-1.5 py-0.5 text-[10px] font-black text-[#071433] shadow-sm"
                                 >
                                   CAP
+                                </span>
+                              )}
+                              {team.dtId === pid && (
+                                <span
+                                  title="Director Técnico del equipo"
+                                  className="shrink-0 rounded-md bg-emerald-400 px-1.5 py-0.5 text-[10px] font-black text-[#071433]"
+                                >
+                                  DT
                                 </span>
                               )}
                               {p.isSubstitute && (

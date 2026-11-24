@@ -162,6 +162,7 @@ function normalizeDB(db: TournamentDB): TournamentDB {
             color: preset.color,
             playerIds: keepPlayers ? existing.playerIds : [],
             captainId: keepPlayers ? (existing?.captainId ?? null) : null,
+            dtId: existing?.dtId ?? null,
             maxPlayers: OFFICIAL_PLAYERS_PER_TEAM,
           };
         })
