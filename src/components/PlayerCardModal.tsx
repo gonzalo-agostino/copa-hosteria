@@ -67,7 +67,7 @@ export function PlayerCardModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[420px] overflow-hidden border-2 border-[#D49B35] bg-gradient-to-b from-[#071433] via-[#0F2557] to-[#16357A] p-0 shadow-[0_28px_70px_rgba(0,0,0,0.8)]">
+      <DialogContent className="max-w-[400px] max-h-[92dvh] overflow-y-auto border-2 border-[#D49B35] bg-gradient-to-b from-[#071433] via-[#0F2557] to-[#16357A] p-2 shadow-[0_28px_70px_rgba(0,0,0,0.8)]">
         <DialogTitle className="sr-only">
           Tarjeta de {player.name}
         </DialogTitle>
@@ -76,10 +76,10 @@ export function PlayerCardModal({
         </DialogDescription>
 
         {/* Inner decorative gold frame */}
-        <div className="relative m-2.5 rounded-[22px] border border-[#F0C46B]/35 px-4 pb-4 pt-4 sm:px-5 sm:pb-5">
+        <div className="relative overflow-hidden rounded-[22px] border border-[#F0C46B]/35 px-3.5 pb-3.5 pt-3 sm:px-4 sm:pb-4 sm:pt-3.5">
           {/* Golden radial aura behind avatar */}
           <div
-            className="pointer-events-none absolute left-1/2 top-24 h-64 w-64 -translate-x-1/2 rounded-full opacity-40 blur-3xl"
+            className="pointer-events-none absolute left-1/2 top-20 h-56 w-56 -translate-x-1/2 rounded-full opacity-40 blur-3xl"
             style={{
               background:
                 "radial-gradient(circle, rgba(212,155,53,0.65) 0%, rgba(212,155,53,0) 72%)",
@@ -87,34 +87,34 @@ export function PlayerCardModal({
           />
 
           {/* Top Header */}
-          <div className="relative flex items-center justify-between gap-2 border-b border-[#D49B35]/40 pb-3 pr-8">
-            <div className="flex items-center gap-2.5 min-w-0">
+          <div className="relative flex items-center justify-between gap-2 border-b border-[#D49B35]/40 pb-2.5 pr-9">
+            <div className="flex items-center gap-2 min-w-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/logo-copa-hosteria.jpg"
                 alt="Copa Hostería"
-                className="h-10 w-10 shrink-0 rounded-xl border border-[#D49B35] object-cover shadow"
+                className="h-9 w-9 shrink-0 rounded-xl border border-[#D49B35] object-cover shadow"
               />
               <div className="min-w-0">
                 <p className="truncate text-sm font-black tracking-tight text-white">
                   COPA HOSTERÍA
                 </p>
-                <p className="text-[11px] font-bold text-[#F0C46B]">
+                <p className="text-[10px] font-bold text-[#F0C46B]">
                   4° EDICIÓN · 28.11.2026
                 </p>
               </div>
             </div>
             {potNumber && (
-              <span className="shrink-0 rounded-full border border-[#F0C46B]/65 bg-[#D49B35]/20 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-[#F0C46B]">
+              <span className="shrink-0 rounded-full border border-[#F0C46B]/65 bg-[#D49B35]/20 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-[#F0C46B]">
                 Bombo {potNumber}
               </span>
             )}
           </div>
 
           {/* Champion / Status Pill */}
-          <div className="relative mt-3.5 flex justify-center">
+          <div className="relative mt-2.5 flex justify-center">
             <span
-              className={`inline-flex items-center rounded-full border px-3.5 py-1 text-[11px] font-extrabold tracking-wide ${
+              className={`inline-flex items-center rounded-full border px-3 py-0.5 text-[10px] font-extrabold tracking-wide ${
                 player.stars > 0
                   ? "border-[#F0C46B] bg-[#D49B35]/22 text-[#F5CE78]"
                   : "border-white/25 bg-white/8 text-blue-100"
@@ -125,9 +125,9 @@ export function PlayerCardModal({
           </div>
 
           {/* Player Circular Photo / Avatar */}
-          <div className="relative mt-4 flex justify-center">
+          <div className="relative mt-3 flex justify-center">
             <div
-              className={`rounded-full p-1.5 ${
+              className={`rounded-full p-1 ${
                 player.stars > 0
                   ? "ring-2 ring-[#F0C46B] shadow-lg shadow-[#D49B35]/25"
                   : "ring-2 ring-[#D49B35]/60"
@@ -138,18 +138,18 @@ export function PlayerCardModal({
                 photoUrl={player.photoUrl}
                 stars={player.stars}
                 size="lg"
-                className="h-28 w-28 sm:h-32 sm:w-32 text-3xl"
+                className="h-24 w-24 sm:h-28 sm:w-28 text-2xl"
               />
             </div>
           </div>
 
           {/* Player Name & Position / Stars */}
-          <div className="relative mt-3.5 text-center">
-            <h2 className="text-2xl sm:text-[26px] font-black uppercase tracking-tight text-white leading-tight">
+          <div className="relative mt-2.5 text-center">
+            <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white leading-tight">
               {player.name}
             </h2>
             {(player.position || player.stars > 0 || player.isSubstitute || player.isDT) && (
-              <div className="mt-1.5 flex flex-wrap items-center justify-center gap-2 text-xs font-extrabold text-[#F5CE78]">
+              <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-xs font-extrabold text-[#F5CE78]">
                 {player.position && (
                   <span className="uppercase tracking-wider">
                     {player.position}
@@ -175,7 +175,7 @@ export function PlayerCardModal({
           {/* Assigned Team Banner */}
           {team && (
             <div
-              className="relative mt-4 flex items-center gap-3 rounded-2xl border-2 bg-[#071433]/85 px-3.5 py-2.5"
+              className="relative mt-3 flex items-center gap-3 rounded-2xl border-2 bg-[#071433]/85 px-3 py-2"
               style={{
                 borderColor: team.color === "#F8FAFC" ? "#F0C46B" : team.color,
               }}
@@ -184,11 +184,11 @@ export function PlayerCardModal({
                 name={team.name}
                 color={team.color}
                 imageUrl={team.imageUrl}
-                size="lg"
+                size="md"
               />
               <div className="min-w-0">
                 <p
-                  className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                  className={`text-[10px] font-extrabold uppercase tracking-wider leading-tight ${
                     isCaptain
                       ? "text-[#F5CE78]"
                       : isTeamDT
@@ -204,7 +204,7 @@ export function PlayerCardModal({
                         ? "© Capitán del equipo"
                         : "Equipo asignado"}
                 </p>
-                <p className="truncate text-lg font-black uppercase tracking-tight text-white">
+                <p className="truncate text-base font-black uppercase tracking-tight text-white leading-snug">
                   {team.name}
                 </p>
               </div>
@@ -212,20 +212,20 @@ export function PlayerCardModal({
           )}
 
           {/* Stats Grid */}
-          <div className="relative mt-3.5 grid grid-cols-2 gap-2.5">
+          <div className="relative mt-3 grid grid-cols-2 gap-2">
             {/* Titles */}
-            <div className="rounded-2xl border border-[#D49B35]/45 bg-[#071433]/82 p-3 text-center">
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#F0C46B]">
+            <div className="rounded-2xl border border-[#D49B35]/45 bg-[#071433]/82 px-2.5 py-2.5 text-center">
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#F0C46B] leading-tight">
                 Historial de Títulos
               </p>
               <p
-                className={`mt-1.5 text-2xl font-black ${
+                className={`mt-1 text-xl font-black leading-none ${
                   player.stars > 0 ? "text-[#F5CE78]" : "text-slate-400"
                 }`}
               >
                 {player.stars > 0 ? formatStars(player.stars) : "—"}
               </p>
-              <p className="mt-1 text-[11px] font-semibold text-blue-100/85">
+              <p className="mt-1 text-[11px] font-semibold text-blue-100/85 leading-tight">
                 {player.stars === 1
                   ? "1 vez Campeón"
                   : player.stars > 1
@@ -235,18 +235,18 @@ export function PlayerCardModal({
             </div>
 
             {/* Historical Goals */}
-            <div className="rounded-2xl border border-[#D49B35]/45 bg-[#071433]/82 p-3 text-center">
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#F0C46B]">
+            <div className="rounded-2xl border border-[#D49B35]/45 bg-[#071433]/82 px-2.5 py-2.5 text-center">
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#F0C46B] leading-tight">
                 Goles Anteriores
               </p>
               <p
-                className={`mt-1.5 text-2xl font-black tabular-nums ${
+                className={`mt-1 text-xl font-black tabular-nums leading-none ${
                   totalPastGoals > 0 ? "text-white" : "text-slate-400"
                 }`}
               >
                 {totalPastGoals}
               </p>
-              <p className="mt-1 text-[11px] font-semibold text-blue-100/85">
+              <p className="mt-1 text-[11px] font-semibold text-blue-100/85 leading-tight">
                 {pastBreakdown.length > 0
                   ? pastBreakdown.join(" · ")
                   : "Sin goles previos"}
@@ -256,7 +256,7 @@ export function PlayerCardModal({
 
           {/* 2026 Live Stats Pill (if player has goals or assists in 2026) */}
           {(goals2026 > 0 || assists2026 > 0) && (
-            <div className="relative mt-2.5 flex items-center justify-center gap-4 rounded-xl border border-emerald-400/35 bg-emerald-500/12 px-3 py-2 text-xs font-bold text-emerald-100">
+            <div className="relative mt-2 flex items-center justify-center gap-4 rounded-xl border border-emerald-400/35 bg-emerald-500/12 px-3 py-1.5 text-xs font-bold text-emerald-100">
               <span>4° Edición (2026):</span>
               {goals2026 > 0 && (
                 <span>
@@ -264,15 +264,13 @@ export function PlayerCardModal({
                 </span>
               )}
               {assists2026 > 0 && (
-                <span>
-                  🎯 {assists2026} {assists2026 === 1 ? "asist." : "asist."}
-                </span>
+                <span>🎯 {assists2026} asist.</span>
               )}
             </div>
           )}
 
           {/* Optional Download Button */}
-          <div className="relative mt-4 flex items-center justify-between gap-2 border-t border-white/10 pt-3">
+          <div className="relative mt-3 flex items-center justify-between gap-2 border-t border-white/10 pt-2.5">
             <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200/60">
               Copa Hostería · 2026
             </span>
