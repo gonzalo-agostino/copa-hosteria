@@ -43,6 +43,7 @@ export interface Team {
   editionId: string;
   name: string;
   color: string; // hex color for jersey/badge
+  imageUrl?: string | null;
   playerIds: string[];
   captainId?: string | null;
   dtId?: string | null;

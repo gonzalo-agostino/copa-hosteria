@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Sparkles,
   Shuffle,
@@ -20,6 +20,10 @@ import {
   Minus,
   UserCheck,
   Search,
+  Camera,
+  Trash2,
+  Loader2,
+  IdCard,
 } from "lucide-react";
 import { Player, Team, TournamentDB } from "@/types/tournament";
 import {
@@ -33,16 +37,17 @@ import {
 } from "@/lib/seed";
 import {
   buildWhatsAppTeamsText,
-  downloadPlayerCardPng,
   downloadSingleTeamCardPng,
   downloadTeamsPosterPng,
 } from "@/lib/export";
+import { compressImageForUpload } from "@/lib/imageUpload";
 import {
   exportDrawCutoutSheetsPdf,
   exportTeamsSheetPdf,
 } from "@/lib/exportPdf";
 import { formatStars } from "@/lib/utils";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { TeamBadge } from "@/components/TeamBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +64,8 @@ interface DrawModuleProps {
   db: TournamentDB;
   isOrganizer: boolean;
   onUpdateDB: (updater: (prev: TournamentDB) => TournamentDB) => void;
+  onReplaceDB: (nextDB: TournamentDB) => void;
+  onSelectPlayer: (playerId: string) => void;
   onRequestOrganizer: () => void;
 }
 
@@ -114,9 +121,15 @@ export function DrawModule({
   db,
   isOrganizer,
   onUpdateDB,
+  onReplaceDB,
+  onSelectPlayer,
   onRequestOrganizer,
 }: DrawModuleProps) {
   const [step, setStep] = useState<DrawStep>("bolillero");
+  const [uploadingTeamId, setUploadingTeamId] = useState<string | null>(null);
+  const [teamUploadError, setTeamUploadError] = useState<string | null>(null);
+  const teamFileInputRef = useRef<HTMLInputElement | null>(null);
+  const targetTeamIdRef = useRef<string | null>(null);
   const [manualSearch, setManualSearch] = useState("");
   const [draggedManualPlayerId, setDraggedManualPlayerId] = useState<
     string | null
@@ -220,6 +233,7 @@ export function DrawModule({
           editionId: "ed-2026",
           name: existing?.name ?? preset.name,
           color: existing?.color ?? preset.color,
+          imageUrl: existing?.imageUrl ?? null,
           playerIds: [],
           dtId: existing?.dtId ?? null,
         };
@@ -251,6 +265,73 @@ export function DrawModule({
     }));
   };
 
+  const triggerTeamImagePicker = (teamId: string) => {
+    targetTeamIdRef.current = teamId;
+    setTeamUploadError(null);
+    if (teamFileInputRef.current) {
+      teamFileInputRef.current.value = "";
+      teamFileInputRef.current.click();
+    }
+  };
+
+  const handleTeamFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    const teamId = targetTeamIdRef.current;
+    if (!file || !teamId) return;
+
+    setUploadingTeamId(teamId);
+    setTeamUploadError(null);
+    try {
+      const { blob: compressed, ext } = await compressImageForUpload(file, {
+        maxSize: 480,
+        preserveTransparency: true,
+      });
+      const formData = new FormData();
+      formData.append("file", compressed, `${teamId}.${ext}`);
+
+      const res = await fetch(`/api/teams/${teamId}/image`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(errData.error ?? "No se pudo subir la imagen");
+      }
+
+      const data = (await res.json()) as { db: TournamentDB };
+      if (data.db) {
+        onReplaceDB(data.db);
+      }
+    } catch (err) {
+      setTeamUploadError(
+        err instanceof Error ? err.message : "Error al subir la imagen del equipo"
+      );
+    } finally {
+      setUploadingTeamId(null);
+    }
+  };
+
+  const handleDeleteTeamImage = async (teamId: string) => {
+    setUploadingTeamId(teamId);
+    setTeamUploadError(null);
+    try {
+      const res = await fetch(`/api/teams/${teamId}/image`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { db: TournamentDB };
+        if (data.db) onReplaceDB(data.db);
+      }
+    } finally {
+      setUploadingTeamId(null);
+    }
+  };
+
   const handleSuggestPots = () => {
     onUpdateDB((prev) => ({
       ...prev,
@@ -279,6 +360,7 @@ export function DrawModule({
             editionId: "ed-2026",
             name: existing?.name ?? preset.name,
             color: existing?.color ?? preset.color,
+            imageUrl: existing?.imageUrl ?? null,
             playerIds: [],
             captainId: null,
             dtId: existing?.dtId ?? null,
@@ -919,6 +1001,21 @@ export function DrawModule({
 
   return (
     <div className="space-y-4">
+      {/* Hidden shared file input for team image uploads */}
+      <input
+        ref={teamFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleTeamFileChange}
+      />
+
+      {teamUploadError && (
+        <div className="rounded-xl border border-red-400/50 bg-red-950/60 px-3.5 py-2.5 text-xs font-semibold text-red-200">
+          {teamUploadError}
+        </div>
+      )}
+
       {/* Sub-navigation for Organizer */}
       {isOrganizer && (
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 rounded-2xl border border-white/10 bg-[#0A1B42]/75 p-1.5">
@@ -1223,12 +1320,13 @@ export function DrawModule({
                     <CardHeader className="pb-2.5">
                       <CardTitle className="flex items-center justify-between text-sm">
                         <span className="flex items-center gap-2 min-w-0 text-[#F0C46B]">
-                          <span
-                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white text-[11px] font-extrabold text-white shadow-sm"
-                            style={{ backgroundColor: team.color }}
-                          >
-                            {teamIdx + 1}
-                          </span>
+                          <TeamBadge
+                            name={team.name}
+                            color={team.color}
+                            imageUrl={team.imageUrl}
+                            size="md"
+                            label={teamIdx + 1}
+                          />
                           <span className="truncate text-white font-bold">
                             {team.name}
                           </span>
@@ -1484,10 +1582,29 @@ export function DrawModule({
                   className="rounded-2xl border border-white/12 bg-[#10295E]/70 p-3.5 space-y-2.5"
                 >
                   <div className="flex items-center gap-2.5">
-                    <span
-                      className="h-5 w-5 shrink-0 rounded-full border-2 border-white shadow"
-                      style={{ backgroundColor: team.color }}
-                    />
+                    <button
+                      type="button"
+                      disabled={uploadingTeamId === team.id}
+                      onClick={() => triggerTeamImagePicker(team.id)}
+                      title={
+                        team.imageUrl
+                          ? "Cambiar imagen del equipo"
+                          : "Subir imagen / escudo del equipo"
+                      }
+                      className="relative shrink-0 rounded-full cursor-pointer group"
+                    >
+                      <TeamBadge
+                        name={team.name}
+                        color={team.color}
+                        imageUrl={team.imageUrl}
+                        size="lg"
+                      />
+                      {uploadingTeamId === team.id && (
+                        <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60">
+                          <Loader2 className="h-4 w-4 animate-spin text-[#F5CE78]" />
+                        </span>
+                      )}
+                    </button>
                     <Input
                       value={team.name}
                       onChange={(e) =>
@@ -1496,6 +1613,30 @@ export function DrawModule({
                       placeholder={`Equipo ${idx + 1}`}
                       className="h-10 text-sm font-bold"
                     />
+                    <button
+                      type="button"
+                      disabled={uploadingTeamId === team.id}
+                      onClick={() => triggerTeamImagePicker(team.id)}
+                      title={
+                        team.imageUrl
+                          ? "Cambiar imagen del equipo"
+                          : "Subir imagen del equipo"
+                      }
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#D49B35]/45 bg-[#D49B35]/15 text-[#F5CE78] transition active:scale-95 hover:bg-[#D49B35]/25 disabled:opacity-45 cursor-pointer"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </button>
+                    {team.imageUrl && (
+                      <button
+                        type="button"
+                        disabled={uploadingTeamId === team.id}
+                        onClick={() => handleDeleteTeamImage(team.id)}
+                        title="Quitar imagen del equipo"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-blue-200/70 transition active:scale-95 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-45 cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center justify-between rounded-xl border border-white/10 bg-[#0A1B42]/70 px-3 py-1.5">
                     <span className="text-xs font-semibold text-blue-200/80">
@@ -1899,9 +2040,11 @@ export function DrawModule({
                           </span>
                         )}
                         <span className="inline-flex items-center gap-1.5 font-bold text-white">
-                          <span
-                            className="h-3 w-3 rounded-full border border-white"
-                            style={{ backgroundColor: lastDrawnTeam.color }}
+                          <TeamBadge
+                            name={lastDrawnTeam.name}
+                            color={lastDrawnTeam.color}
+                            imageUrl={lastDrawnTeam.imageUrl}
+                            size="xs"
                           />
                           {lastDrawnTeam.name}
                         </span>
@@ -1910,17 +2053,11 @@ export function DrawModule({
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() =>
-                            downloadPlayerCardPng(
-                              lastDrawnPlayer,
-                              lastDrawnTeam,
-                              db.draw.lastDrawn?.potNumber
-                            )
-                          }
+                          onClick={() => onSelectPlayer(lastDrawnPlayer.id)}
                           className="w-full"
                         >
-                          <Download className="h-3.5 w-3.5" />
-                          Descargar tarjeta del jugador (PNG)
+                          <IdCard className="h-3.5 w-3.5" />
+                          Ver tarjeta del jugador
                         </Button>
                       </div>
                     </div>
@@ -2204,15 +2341,58 @@ export function DrawModule({
                     style={{ backgroundColor: team.color }}
                   />
                   <CardHeader className="pb-2.5">
-                    <CardTitle className="flex items-center justify-between text-base">
+                    <CardTitle className="flex items-center justify-between text-base gap-2">
                       <span className="flex items-center gap-2.5 truncate">
-                        <span
-                          className="h-4 w-4 shrink-0 rounded-full border-2 border-white shadow-sm"
-                          style={{ backgroundColor: team.color }}
-                        />
+                        {isOrganizer ? (
+                          <button
+                            type="button"
+                            disabled={uploadingTeamId === team.id}
+                            onClick={() => triggerTeamImagePicker(team.id)}
+                            title={
+                              team.imageUrl
+                                ? "Cambiar imagen del equipo"
+                                : "Subir imagen del equipo"
+                            }
+                            className="relative shrink-0 rounded-full cursor-pointer"
+                          >
+                            <TeamBadge
+                              name={team.name}
+                              color={team.color}
+                              imageUrl={team.imageUrl}
+                              size="md"
+                            />
+                            {uploadingTeamId === team.id && (
+                              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#F5CE78]" />
+                              </span>
+                            )}
+                          </button>
+                        ) : (
+                          <TeamBadge
+                            name={team.name}
+                            color={team.color}
+                            imageUrl={team.imageUrl}
+                            size="md"
+                          />
+                        )}
                         <span className="truncate">{team.name}</span>
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {isOrganizer && (
+                          <button
+                            type="button"
+                            disabled={uploadingTeamId === team.id}
+                            title={
+                              team.imageUrl
+                                ? `Cambiar imagen de ${team.name}`
+                                : `Subir imagen de ${team.name}`
+                            }
+                            onClick={() => triggerTeamImagePicker(team.id)}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-white/8 text-[#F5CE78] transition active:scale-95 hover:border-[#D49B35]/60 hover:bg-[#D49B35]/20 disabled:opacity-45 cursor-pointer"
+                          >
+                            <Camera className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         {team.playerIds.length > 0 && (
                           <button
                             type="button"
@@ -2246,7 +2426,14 @@ export function DrawModule({
                         : undefined;
                       if (!dtPlayer && !isOrganizer) return null;
                       return (
-                        <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-emerald-400/35 bg-emerald-500/12 px-3 py-2 text-xs">
+                        <div
+                          onClick={() => dtPlayer && onSelectPlayer(dtPlayer.id)}
+                          className={`mb-2 flex items-center justify-between gap-2 rounded-xl border border-emerald-400/35 bg-emerald-500/12 px-3 py-2 text-xs ${
+                            dtPlayer
+                              ? "cursor-pointer transition hover:bg-emerald-500/20"
+                              : ""
+                          }`}
+                        >
                           <div className="flex items-center gap-2 min-w-0">
                             {dtPlayer ? (
                               <>
@@ -2278,6 +2465,7 @@ export function DrawModule({
                             <select
                               aria-label={`Elegir DT para ${team.name}`}
                               value={team.dtId ?? ""}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) =>
                                 handleSetTeamDT(team.id, e.target.value || null)
                               }
@@ -2332,12 +2520,14 @@ export function DrawModule({
                         return (
                           <div
                             key={pid}
-                            className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm transition ${
+                            onClick={() => onSelectPlayer(p.id)}
+                            title={`Ver tarjeta de ${p.name}`}
+                            className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm cursor-pointer transition active:scale-[0.99] ${
                               isLatest
-                                ? "border border-[#F5CE78]/70 bg-[#D49B35]/18 shadow-sm shadow-[#D49B35]/15"
+                                ? "border border-[#F5CE78]/70 bg-[#D49B35]/18 shadow-sm shadow-[#D49B35]/15 hover:bg-[#D49B35]/26"
                                 : isCaptain
-                                  ? "border border-[#D49B35]/55 bg-[#D49B35]/12"
-                                  : "border border-white/8 bg-[#143275]/55"
+                                  ? "border border-[#D49B35]/55 bg-[#D49B35]/12 hover:bg-[#D49B35]/20"
+                                  : "border border-white/8 bg-[#143275]/55 hover:border-[#D49B35]/45 hover:bg-[#183C8C]/75"
                             }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -2375,7 +2565,10 @@ export function DrawModule({
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div
+                              className="flex items-center gap-1.5 shrink-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               {p.stars > 0 && (
                                 <span
                                   className="text-xs font-bold text-[#F5CE78]"
@@ -2422,23 +2615,6 @@ export function DrawModule({
                                   </button>
                                 </>
                               )}
-                              <button
-                                type="button"
-                                title={`Descargar tarjeta PNG de ${p.name}`}
-                                onClick={() => {
-                                  const pot = db.draw.pots.find((pt) =>
-                                    pt.playerIds.includes(p.id)
-                                  );
-                                  downloadPlayerCardPng(
-                                    p,
-                                    team,
-                                    pot?.number ?? null
-                                  );
-                                }}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#D49B35]/35 bg-[#D49B35]/15 text-[#F5CE78] transition active:scale-95 hover:bg-[#D49B35]/30 cursor-pointer"
-                              >
-                                <Download className="h-3.5 w-3.5" />
-                              </button>
                             </div>
                           </div>
                         );

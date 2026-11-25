@@ -10,7 +10,7 @@ import {
   ArrowDown,
   FileDown,
 } from "lucide-react";
-import { TournamentDB } from "@/types/tournament";
+import { Team, TournamentDB } from "@/types/tournament";
 import { SEED_EDITIONS } from "@/lib/seed";
 import { exportTournamentRulesPdf } from "@/lib/exportPdf";
 import {
@@ -23,6 +23,7 @@ import {
 } from "@/lib/stats";
 import { formatStars } from "@/lib/utils";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { TeamBadge } from "@/components/TeamBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,14 +32,25 @@ interface StatsModuleProps {
   db: TournamentDB;
   isOrganizer?: boolean;
   onUpdateDB?: (updater: (prev: TournamentDB) => TournamentDB) => void;
+  onSelectPlayer?: (playerId: string) => void;
 }
 
 type StatsTab = "posiciones" | "goleadores" | "asistidores";
+
+function shuffleIds(ids: string[]): string[] {
+  const shuffled = [...ids];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
 
 export function StatsModule({
   db,
   isOrganizer = false,
   onUpdateDB,
+  onSelectPlayer,
 }: StatsModuleProps) {
   const [scope, setScope] = useState<StatsScope>("all");
   const [activeTab, setActiveTab] = useState<StatsTab>("posiciones");
@@ -58,11 +70,7 @@ export function StatsModule({
 
   const handleFlipCoinForGroup = (groupTeamIds: string[]) => {
     if (!onUpdateDB || groupTeamIds.length < 2) return;
-    const shuffled = [...groupTeamIds];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
+    const shuffled = shuffleIds(groupTeamIds);
     // Ensure a real change when only 2 teams are tied so tapping "Tirar Moneda" feels responsive, or pure random
     const rankMap = new Map<string, number>();
     shuffled.forEach((tid, idx) => rankMap.set(tid, idx + 1));
@@ -150,6 +158,21 @@ export function StatsModule({
     [db.players]
   );
 
+  const teamMap = useMemo(
+    () => new Map(db.teams.map((t) => [t.id, t])),
+    [db.teams]
+  );
+
+  const teamByPlayerId = useMemo(() => {
+    const map = new Map<string, Team>();
+    for (const t of db.teams) {
+      for (const pid of t.playerIds) {
+        map.set(pid, t);
+      }
+    }
+    return map;
+  }, [db.teams]);
+
   const officialEditions = useMemo(() => {
     const hasSyncedEditions =
       Array.isArray(db.editions) &&
@@ -225,9 +248,11 @@ export function StatsModule({
                         const p = playerMap.get(pid);
                         if (!p) return null;
                         return (
-                          <span
+                          <button
                             key={pid}
-                            className="inline-flex items-center gap-1 rounded-md bg-white/8 px-1.5 py-0.5 text-[10px] font-medium text-blue-100/90"
+                            type="button"
+                            onClick={() => onSelectPlayer?.(p.id)}
+                            className="inline-flex items-center gap-1 rounded-md bg-white/8 px-1.5 py-0.5 text-[10px] font-medium text-blue-100/90 transition hover:bg-[#D49B35]/25 hover:text-[#F5CE78] cursor-pointer"
                           >
                             <span>{p.name}</span>
                             {p.position === "Arquero" && (
@@ -235,7 +260,7 @@ export function StatsModule({
                                 (ARQ)
                               </span>
                             )}
-                          </span>
+                          </button>
                         );
                       })}
                     </div>
@@ -395,9 +420,11 @@ export function StatsModule({
                           <td className="py-3 px-1.5">
                             <div className="flex items-center justify-between gap-1.5">
                               <div className="flex items-center gap-2 min-w-0">
-                                <span
-                                  className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-white/90 shadow-sm"
-                                  style={{ backgroundColor: row.teamColor }}
+                                <TeamBadge
+                                  name={row.teamName}
+                                  color={row.teamColor}
+                                  imageUrl={teamMap.get(row.teamId)?.imageUrl}
+                                  size="sm"
                                 />
                                 <span className="truncate font-bold text-white max-w-[110px] sm:max-w-none">
                                   {row.teamName}
@@ -586,13 +613,16 @@ export function StatsModule({
                 Todavía no hay goles registrados en la 4° Edición (2026). Probá cambiar el filtro a &quot;Histórico Total (2025 + 2026)&quot;.
               </p>
             ) : (
-              topScorers.map((row, idx) => (
+              topScorers.map((row, idx) => {
+                const playerTeam = teamByPlayerId.get(row.player.id);
+                return (
                 <div
                   key={row.player.id}
-                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ${
+                  onClick={() => onSelectPlayer?.(row.player.id)}
+                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition active:scale-[0.99] ${
                     idx === 0
-                      ? "border border-[#D49B35]/55 bg-[#D49B35]/15"
-                      : "bg-[#16357A]/45"
+                      ? "border border-[#D49B35]/55 bg-[#D49B35]/15 hover:bg-[#D49B35]/22"
+                      : "bg-[#16357A]/45 hover:bg-[#16357A]/70"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -623,9 +653,11 @@ export function StatsModule({
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-blue-100/80">
                         {row.teamName ? (
                           <span className="inline-flex items-center gap-1">
-                            <span
-                              className="h-2 w-2 rounded-full"
-                              style={{ backgroundColor: row.teamColor }}
+                            <TeamBadge
+                              name={row.teamName}
+                              color={row.teamColor ?? "#fff"}
+                              imageUrl={playerTeam?.imageUrl}
+                              size="xs"
                             />
                             {row.teamName}
                           </span>
@@ -667,7 +699,8 @@ export function StatsModule({
                     </span>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>
@@ -693,13 +726,16 @@ export function StatsModule({
                 Todavía no hay asistencias registradas. Al cargar un gol en la planilla en vivo, elegí el asistidor para sumar aquí.
               </p>
             ) : (
-              topAssisters.map((row, idx) => (
+              topAssisters.map((row, idx) => {
+                const playerTeam = teamByPlayerId.get(row.player.id);
+                return (
                 <div
                   key={row.player.id}
-                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 ${
+                  onClick={() => onSelectPlayer?.(row.player.id)}
+                  className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition active:scale-[0.99] ${
                     idx === 0
-                      ? "border border-[#D49B35]/55 bg-[#D49B35]/15"
-                      : "bg-[#16357A]/45"
+                      ? "border border-[#D49B35]/55 bg-[#D49B35]/15 hover:bg-[#D49B35]/22"
+                      : "bg-[#16357A]/45 hover:bg-[#16357A]/70"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -722,7 +758,13 @@ export function StatsModule({
                         )}
                       </p>
                       {row.teamName && (
-                        <p className="text-[11px] text-blue-200/75">
+                        <p className="inline-flex items-center gap-1 text-[11px] text-blue-200/75">
+                          <TeamBadge
+                            name={row.teamName}
+                            color={row.teamColor ?? "#fff"}
+                            imageUrl={playerTeam?.imageUrl}
+                            size="xs"
+                          />
                           {row.teamName}
                         </p>
                       )}
@@ -732,7 +774,8 @@ export function StatsModule({
                     {row.assists}
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>

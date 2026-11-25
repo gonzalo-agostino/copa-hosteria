@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dices,
   CalendarDays,
@@ -12,6 +12,7 @@ import {
 import { TournamentDB } from "@/types/tournament";
 import { CopaCrest } from "@/components/CopaCrest";
 import { OrganizerPinModal } from "@/components/OrganizerPinModal";
+import { PlayerCardModal } from "@/components/PlayerCardModal";
 import { DrawModule } from "@/components/DrawModule";
 import { LiveMatchModule } from "@/components/LiveMatchModule";
 import { StatsModule } from "@/components/StatsModule";
@@ -29,6 +30,7 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
   const [activeTab, setActiveTab] = useState<MainTab>("sorteo");
   const [isOrganizer, setIsOrganizer] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
@@ -132,6 +134,36 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
     },
     [persistDB]
   );
+
+  const handleReplaceDB = useCallback((next: TournamentDB) => {
+    if (next.updatedAt) lastUpdatedAtRef.current = next.updatedAt;
+    setDb(next);
+  }, []);
+
+  const selectedPlayer = useMemo(
+    () =>
+      selectedPlayerId
+        ? db.players.find((p) => p.id === selectedPlayerId) ?? null
+        : null,
+    [db.players, selectedPlayerId]
+  );
+
+  const selectedPlayerTeam = useMemo(() => {
+    if (!selectedPlayerId) return null;
+    return (
+      db.teams.find((t) => t.playerIds.includes(selectedPlayerId)) ??
+      db.teams.find((t) => t.dtId === selectedPlayerId) ??
+      null
+    );
+  }, [db.teams, selectedPlayerId]);
+
+  const selectedPlayerPotNumber = useMemo(() => {
+    if (!selectedPlayerId) return null;
+    const pot = db.draw.pots.find((pt) =>
+      pt.playerIds.includes(selectedPlayerId)
+    );
+    return pot?.number ?? null;
+  }, [db.draw.pots, selectedPlayerId]);
 
   const navItems: { id: MainTab; label: string; icon: React.ElementType }[] = [
     { id: "sorteo", label: "Sorteo", icon: Dices },
@@ -244,6 +276,8 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
             db={db}
             isOrganizer={isOrganizer}
             onUpdateDB={handleUpdateDB}
+            onReplaceDB={handleReplaceDB}
+            onSelectPlayer={setSelectedPlayerId}
             onRequestOrganizer={() => setPinModalOpen(true)}
           />
         )}
@@ -253,6 +287,7 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
             db={db}
             isOrganizer={isOrganizer}
             onUpdateDB={handleUpdateDB}
+            onSelectPlayer={setSelectedPlayerId}
           />
         )}
 
@@ -261,6 +296,7 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
             db={db}
             isOrganizer={isOrganizer}
             onUpdateDB={handleUpdateDB}
+            onSelectPlayer={setSelectedPlayerId}
           />
         )}
 
@@ -269,10 +305,8 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
             db={db}
             isOrganizer={isOrganizer}
             onUpdateDB={handleUpdateDB}
-            onReplaceDB={(next) => {
-              if (next.updatedAt) lastUpdatedAtRef.current = next.updatedAt;
-              setDb(next);
-            }}
+            onReplaceDB={handleReplaceDB}
+            onSelectPlayer={setSelectedPlayerId}
             onRequestOrganizer={() => setPinModalOpen(true)}
           />
         )}
@@ -309,6 +343,18 @@ export function CopaHosteriaApp({ initialDB }: CopaHosteriaAppProps) {
         isOrganizer={isOrganizer}
         onUnlock={() => setIsOrganizer(true)}
         onLock={() => setIsOrganizer(false)}
+      />
+
+      {/* Player Card Modal (opens on clicking any player) */}
+      <PlayerCardModal
+        player={selectedPlayer}
+        team={selectedPlayerTeam}
+        potNumber={selectedPlayerPotNumber}
+        matches={db.matches}
+        open={Boolean(selectedPlayer)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedPlayerId(null);
+        }}
       />
     </div>
   );

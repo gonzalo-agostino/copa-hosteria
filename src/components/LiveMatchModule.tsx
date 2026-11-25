@@ -45,6 +45,7 @@ import {
   exportTournamentRulesPdf,
 } from "@/lib/exportPdf";
 import { formatStars } from "@/lib/utils";
+import { TeamBadge } from "@/components/TeamBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -61,12 +62,14 @@ interface LiveMatchModuleProps {
   db: TournamentDB;
   isOrganizer: boolean;
   onUpdateDB: (updater: (prev: TournamentDB) => TournamentDB) => void;
+  onSelectPlayer?: (playerId: string) => void;
 }
 
 export function LiveMatchModule({
   db,
   isOrganizer,
   onUpdateDB,
+  onSelectPlayer,
 }: LiveMatchModuleProps) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -108,6 +111,7 @@ export function LiveMatchModule({
                 editionId: "ed-2026",
                 name: existing?.name ?? preset.name,
                 color: existing?.color ?? preset.color,
+                imageUrl: existing?.imageUrl ?? null,
                 playerIds: existing?.playerIds ?? [],
                 captainId: existing?.captainId ?? null,
                 dtId: existing?.dtId ?? null,
@@ -135,6 +139,7 @@ export function LiveMatchModule({
                 editionId: "ed-2026",
                 name: existing?.name ?? preset.name,
                 color: existing?.color ?? preset.color,
+                imageUrl: existing?.imageUrl ?? null,
                 playerIds: existing?.playerIds ?? [],
                 captainId: existing?.captainId ?? null,
                 dtId: existing?.dtId ?? null,
@@ -405,9 +410,11 @@ export function LiveMatchModule({
           <CardContent className="p-5">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center">
               <div className="flex flex-col items-center gap-2">
-                <span
-                  className="h-9 w-9 rounded-full border-2 border-white shadow-md"
-                  style={{ backgroundColor: homeTeam?.color ?? "#2563EB" }}
+                <TeamBadge
+                  name={homeTeam?.name ?? "Local"}
+                  color={homeTeam?.color ?? "#2563EB"}
+                  imageUrl={homeTeam?.imageUrl}
+                  size="lg"
                 />
                 <span className="text-sm sm:text-base font-extrabold leading-tight text-white">
                   {homeTeam?.name ?? "Local"}
@@ -457,9 +464,11 @@ export function LiveMatchModule({
               </div>
 
               <div className="flex flex-col items-center gap-2">
-                <span
-                  className="h-9 w-9 rounded-full border-2 border-white shadow-md"
-                  style={{ backgroundColor: awayTeam?.color ?? "#D49B35" }}
+                <TeamBadge
+                  name={awayTeam?.name ?? "Visitante"}
+                  color={awayTeam?.color ?? "#D49B35"}
+                  imageUrl={awayTeam?.imageUrl}
+                  size="lg"
                 />
                 <span className="text-sm sm:text-base font-extrabold leading-tight text-white">
                   {awayTeam?.name ?? "Visitante"}
@@ -649,18 +658,34 @@ export function LiveMatchModule({
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span className="text-lg">⚽</span>
                         <div className="min-w-0">
-                          <p className="truncate font-bold text-white">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              player && onSelectPlayer?.(player.id)
+                            }
+                            className="block truncate font-bold text-white hover:text-[#F5CE78] cursor-pointer text-left"
+                          >
                             {player?.name ?? "Jugador"}
-                          </p>
-                          <p className="text-xs text-blue-200/75">
-                            {assist ? `Asistencia: ${assist.name}` : "Gol"}
-                          </p>
+                          </button>
+                          {assist ? (
+                            <button
+                              type="button"
+                              onClick={() => onSelectPlayer?.(assist.id)}
+                              className="block text-xs text-blue-200/75 hover:text-[#F5CE78] cursor-pointer text-left"
+                            >
+                              Asistencia: {assist.name}
+                            </button>
+                          ) : (
+                            <p className="text-xs text-blue-200/75">Gol</p>
+                          )}
                         </div>
                       </div>
                       <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-blue-100">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full border border-white"
-                          style={{ backgroundColor: team?.color ?? "#fff" }}
+                        <TeamBadge
+                          name={team?.name ?? "Equipo"}
+                          color={team?.color ?? "#fff"}
+                          imageUrl={team?.imageUrl}
+                          size="xs"
                         />
                         {team?.name}
                       </span>
@@ -749,9 +774,11 @@ export function LiveMatchModule({
                             : "border-white/12 bg-[#0A1B42]/70 text-blue-200/75"
                         }`}
                       >
-                        <span
-                          className="h-3.5 w-3.5 rounded-full border border-white"
-                          style={{ backgroundColor: team.color }}
+                        <TeamBadge
+                          name={team.name}
+                          color={team.color}
+                          imageUrl={team.imageUrl}
+                          size="sm"
                         />
                         <span className="truncate">{team.name}</span>
                       </button>
@@ -823,26 +850,49 @@ export function LiveMatchModule({
       );
     }
 
+    const badge = team.imageUrl ? (
+      <TeamBadge
+        name={team.name}
+        color={team.color}
+        imageUrl={team.imageUrl}
+        size="sm"
+      />
+    ) : null;
+
     if (isVeryDarkColor(team.color)) {
       return (
         <span
-          className={`inline-flex max-w-full items-center truncate rounded-lg border border-white/70 bg-[#111827] px-2 py-0.5 text-xs sm:text-sm font-black uppercase tracking-tight text-white shadow-sm ${
-            crossed ? "opacity-50 line-through" : ""
+          className={`inline-flex max-w-full items-center gap-1.5 ${
+            align === "right" ? "flex-row-reverse" : ""
           }`}
         >
-          {label}
+          {badge}
+          <span
+            className={`inline-flex max-w-full items-center truncate rounded-lg border border-white/70 bg-[#111827] px-2 py-0.5 text-xs sm:text-sm font-black uppercase tracking-tight text-white shadow-sm ${
+              crossed ? "opacity-50 line-through" : ""
+            }`}
+          >
+            {label}
+          </span>
         </span>
       );
     }
 
     return (
       <span
-        className={`truncate text-xs sm:text-sm font-black uppercase tracking-tight drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)] ${
-          align === "right" ? "text-right" : "text-left"
-        } ${crossed ? "opacity-50 line-through" : ""}`}
-        style={{ color: team.color }}
+        className={`inline-flex max-w-full items-center gap-1.5 ${
+          align === "right" ? "flex-row-reverse" : ""
+        }`}
       >
-        {label}
+        {badge}
+        <span
+          className={`truncate text-xs sm:text-sm font-black uppercase tracking-tight drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)] ${
+            align === "right" ? "text-right" : "text-left"
+          } ${crossed ? "opacity-50 line-through" : ""}`}
+          style={{ color: team.color }}
+        >
+          {label}
+        </span>
       </span>
     );
   };
@@ -902,21 +952,33 @@ export function LiveMatchModule({
             </div>
             <Badge variant="gold">★ CAMPEÓN 4° EDICIÓN (2026) ★</Badge>
             <div className="flex items-center gap-2.5">
-              <span
-                className="h-5 w-5 rounded-full border-2 border-white"
-                style={{ backgroundColor: championTeam.color }}
+              <TeamBadge
+                name={championTeam.name}
+                color={championTeam.color}
+                imageUrl={championTeam.imageUrl}
+                size="lg"
               />
               <h2 className="text-2xl sm:text-3xl font-black text-white">
                 {championTeam.name.toUpperCase()}
               </h2>
             </div>
             {championTeam.playerIds.length > 0 && (
-              <p className="max-w-md text-xs text-blue-100/85 leading-relaxed">
-                {championTeam.playerIds
-                  .map((pid) => playerMap.get(pid)?.name)
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
+              <div className="flex max-w-md flex-wrap justify-center gap-1.5">
+                {championTeam.playerIds.map((pid) => {
+                  const p = playerMap.get(pid);
+                  if (!p) return null;
+                  return (
+                    <button
+                      key={pid}
+                      type="button"
+                      onClick={() => onSelectPlayer?.(p.id)}
+                      className="rounded-lg bg-white/10 px-2 py-0.5 text-xs font-semibold text-blue-100 transition hover:bg-[#D49B35]/30 hover:text-[#F5CE78] cursor-pointer"
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>

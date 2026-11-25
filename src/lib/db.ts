@@ -160,6 +160,7 @@ function normalizeDB(db: TournamentDB): TournamentDB {
             editionId: "ed-2026",
             name: keepCustomName ? existing.name : preset.name,
             color: preset.color,
+            imageUrl: existing?.imageUrl ?? null,
             playerIds: keepPlayers ? existing.playerIds : [],
             captainId: keepPlayers ? (existing?.captainId ?? null) : null,
             dtId: existing?.dtId ?? null,

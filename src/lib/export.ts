@@ -65,9 +65,54 @@ function loadLogoImage(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
+function drawTeamBadgeCircle(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+  color: string,
+  teamImg: HTMLImageElement | null,
+  strokeWidth = 2.5
+) {
+  if (teamImg) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.clip();
+    const scale = Math.max(
+      (radius * 2) / teamImg.width,
+      (radius * 2) / teamImg.height
+    );
+    const dw = teamImg.width * scale;
+    const dh = teamImg.height * scale;
+    ctx.drawImage(teamImg, cx - dw / 2, cy - dh / 2, dw, dh);
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = color === "#F8FAFC" ? "#F0C46B" : color;
+    ctx.lineWidth = strokeWidth;
+    ctx.stroke();
+    return;
+  }
+
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#FFFFFF";
+  ctx.lineWidth = strokeWidth;
+  ctx.stroke();
+}
+
 export async function downloadTeamsPosterPng(teams: Team[], players: Player[]) {
   const playerMap = new Map(players.map((p) => [p.id, p]));
-  const logoImg = await loadLogoImage("/logo-copa-hosteria.jpg");
+  const [logoImg, ...teamImages] = await Promise.all([
+    loadLogoImage("/logo-copa-hosteria.jpg"),
+    ...teams.map((t) =>
+      t.imageUrl ? loadLogoImage(t.imageUrl) : Promise.resolve(null)
+    ),
+  ]);
 
   const cols = 2;
   const rows = Math.ceil(teams.length / cols);
@@ -185,14 +230,16 @@ export async function downloadTeamsPosterPng(teams: Team[], players: Player[]) {
     drawRoundedRect(ctx, x + 2, y + 2, cardW - 4, 62, 18);
     ctx.fill();
 
-    // Team color dot
-    ctx.fillStyle = team.color;
-    ctx.beginPath();
-    ctx.arc(x + 34, y + 34, 13, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    // Team badge / color dot
+    drawTeamBadgeCircle(
+      ctx,
+      x + 34,
+      y + 34,
+      16,
+      team.color,
+      teamImages[idx] ?? null,
+      2
+    );
 
     // Team Name
     ctx.fillStyle = "#FFFFFF";
@@ -280,9 +327,10 @@ export async function downloadPlayerCardPng(
   team?: Team | null,
   potNumber?: number | null
 ) {
-  const [logoImg, photoImg] = await Promise.all([
+  const [logoImg, photoImg, teamImg] = await Promise.all([
     loadLogoImage("/logo-copa-hosteria.jpg"),
     player.photoUrl ? loadLogoImage(player.photoUrl) : Promise.resolve(null),
+    team?.imageUrl ? loadLogoImage(team.imageUrl) : Promise.resolve(null),
   ]);
 
   const width = 1080;
@@ -466,14 +514,16 @@ export async function downloadPlayerCardPng(
     ctx.lineWidth = 3.5;
     ctx.stroke();
 
-    // Jersey color circle
-    ctx.fillStyle = team.color;
-    ctx.beginPath();
-    ctx.arc(tX + 54, teamBoxY + tH / 2, 22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    // Team image / jersey color circle
+    drawTeamBadgeCircle(
+      ctx,
+      tX + 54,
+      teamBoxY + tH / 2,
+      26,
+      team.color,
+      teamImg,
+      3
+    );
 
     const isCaptain = team.captainId === player.id;
     const isTeamDT = team.dtId === player.id;
@@ -607,8 +657,9 @@ export async function downloadSingleTeamCardPng(
     .map((pid) => playerMap.get(pid))
     .filter((p): p is Player => Boolean(p));
 
-  const [logoImg, ...playerPhotos] = await Promise.all([
+  const [logoImg, teamImg, ...playerPhotos] = await Promise.all([
     loadLogoImage("/logo-copa-hosteria.jpg"),
+    team.imageUrl ? loadLogoImage(team.imageUrl) : Promise.resolve(null),
     ...teamPlayers.map((p) =>
       p.photoUrl ? loadLogoImage(p.photoUrl) : Promise.resolve(null)
     ),
@@ -716,14 +767,16 @@ export async function downloadSingleTeamCardPng(
   ctx.lineWidth = 4;
   ctx.stroke();
 
-  // Team color accent circle
-  ctx.fillStyle = team.color;
-  ctx.beginPath();
-  ctx.arc(bannerX + 74, bannerY + 74, 34, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "#FFFFFF";
-  ctx.lineWidth = 4;
-  ctx.stroke();
+  // Team image / color accent circle
+  drawTeamBadgeCircle(
+    ctx,
+    bannerX + 74,
+    bannerY + 74,
+    36,
+    team.color,
+    teamImg,
+    4
+  );
 
   // Team Name
   ctx.textAlign = "left";

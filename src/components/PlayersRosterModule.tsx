@@ -11,13 +11,13 @@ import {
   Loader2,
   Pencil,
   UserPlus,
-  Download,
   ClipboardList,
 } from "lucide-react";
 import { Player, PlayerPosition, Team, TournamentDB } from "@/types/tournament";
 import { formatStars } from "@/lib/utils";
-import { downloadPlayerCardPng } from "@/lib/export";
+import { compressImageForUpload } from "@/lib/imageUpload";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { TeamBadge } from "@/components/TeamBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ interface PlayersRosterModuleProps {
   isOrganizer: boolean;
   onUpdateDB: (updater: (prev: TournamentDB) => TournamentDB) => void;
   onReplaceDB: (nextDB: TournamentDB) => void;
+  onSelectPlayer: (playerId: string) => void;
   onRequestOrganizer: () => void;
 }
 
@@ -58,47 +59,12 @@ interface PlayerFormState {
   isDT: boolean;
 }
 
-async function compressImageToJpeg(file: File, maxSize = 420): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        resolve(file);
-        return;
-      }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(
-        (blob) => {
-          if (blob) resolve(blob);
-          else resolve(file);
-        },
-        "image/jpeg",
-        0.85
-      );
-    };
-    img.onerror = (err) => {
-      URL.revokeObjectURL(objectUrl);
-      reject(err);
-    };
-    img.src = objectUrl;
-  });
-}
-
 export function PlayersRosterModule({
   db,
   isOrganizer,
   onUpdateDB,
   onReplaceDB,
+  onSelectPlayer,
   onRequestOrganizer,
 }: PlayersRosterModuleProps) {
   const [query, setQuery] = useState("");
@@ -387,9 +353,11 @@ export function PlayersRosterModule({
     setUploadingId(playerId);
     setUploadError(null);
     try {
-      const compressed = await compressImageToJpeg(file);
+      const { blob: compressed, ext } = await compressImageForUpload(file, {
+        maxSize: 420,
+      });
       const formData = new FormData();
-      formData.append("file", compressed, `${playerId}.jpg`);
+      formData.append("file", compressed, `${playerId}.${ext}`);
 
       const res = await fetch(`/api/players/${playerId}/photo`, {
         method: "POST",
@@ -560,22 +528,26 @@ export function PlayersRosterModule({
           return (
             <Card
               key={p.id}
-              className="transition hover:border-[#D49B35]/40 hover:bg-[#0C2152]/85"
+              onClick={() => onSelectPlayer(p.id)}
+              className="cursor-pointer transition hover:border-[#D49B35]/50 hover:bg-[#0C2152]/90 active:scale-[0.995]"
             >
               <CardContent className="flex items-center justify-between gap-2.5 p-3.5">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     type="button"
-                    disabled={!isOrganizer || isBusy}
-                    onClick={() => isOrganizer && triggerPhotoPicker(p.id)}
+                    disabled={isBusy}
+                    onClick={(e) => {
+                      if (isOrganizer) {
+                        e.stopPropagation();
+                        triggerPhotoPicker(p.id);
+                      }
+                    }}
                     title={
                       isOrganizer
                         ? "Tocá para cargar o cambiar foto"
-                        : p.name
+                        : `Ver tarjeta de ${p.name}`
                     }
-                    className={`relative shrink-0 rounded-full ${
-                      isOrganizer ? "cursor-pointer group" : "cursor-default"
-                    }`}
+                    className="relative shrink-0 rounded-full cursor-pointer group"
                   >
                     <PlayerAvatar
                       name={p.name}
@@ -626,18 +598,22 @@ export function PlayersRosterModule({
                       )}
                       {dtTeam && (
                         <span className="inline-flex items-center gap-1 font-semibold text-emerald-200">
-                          <span
-                            className="h-2.5 w-2.5 rounded-full border border-white/80"
-                            style={{ backgroundColor: dtTeam.color }}
+                          <TeamBadge
+                            name={dtTeam.name}
+                            color={dtTeam.color}
+                            imageUrl={dtTeam.imageUrl}
+                            size="xs"
                           />
                           DT · {dtTeam.name}
                         </span>
                       )}
                       {team && team.id !== dtTeam?.id ? (
                         <span className="inline-flex items-center gap-1 font-medium text-white/90">
-                          <span
-                            className="h-2.5 w-2.5 rounded-full border border-white/80"
-                            style={{ backgroundColor: team.color }}
+                          <TeamBadge
+                            name={team.name}
+                            color={team.color}
+                            imageUrl={team.imageUrl}
+                            size="xs"
                           />
                           {team.name}
                         </span>
@@ -676,75 +652,59 @@ export function PlayersRosterModule({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const pot = db.draw.pots.find((pt) =>
-                        pt.playerIds.includes(p.id)
-                      );
-                      downloadPlayerCardPng(
-                        p,
-                        team ?? dtTeam ?? null,
-                        pot?.number ?? null
-                      );
-                    }}
-                    title="Descargar tarjeta PNG del jugador"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-blue-100 transition active:scale-95 hover:border-[#D49B35]/60 hover:bg-[#D49B35]/20 hover:text-[#F5CE78] cursor-pointer"
+                {isOrganizer && (
+                  <div
+                    className="flex items-center gap-1.5 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Download className="h-4 w-4" />
-                  </button>
-                  {isOrganizer && (
-                    <>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => handleToggleDT(p.id)}
+                      title={
+                        p.isDT
+                          ? "Quitar marca de DT"
+                          : "Tildar como Director Técnico (DT)"
+                      }
+                      className={`flex h-9 px-2 items-center justify-center rounded-xl border text-[11px] font-black transition active:scale-95 cursor-pointer ${
+                        p.isDT
+                          ? "border-emerald-400 bg-emerald-500 text-[#071433]"
+                          : "border-white/15 bg-white/8 text-blue-200/80 hover:border-emerald-400/60 hover:text-emerald-200"
+                      }`}
+                    >
+                      DT
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => openEditModal(p)}
+                      title="Editar datos del jugador"
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-white transition active:scale-95 hover:border-[#D49B35]/60 hover:bg-[#D49B35]/20 hover:text-[#F5CE78] cursor-pointer"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => triggerPhotoPicker(p.id)}
+                      title={p.photoUrl ? "Cambiar foto" : "Subir foto"}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#D49B35]/40 bg-[#D49B35]/15 text-[#F5CE78] transition active:scale-95 hover:bg-[#D49B35]/25 disabled:opacity-45 cursor-pointer"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </button>
+                    {p.photoUrl && (
                       <button
                         type="button"
                         disabled={isBusy}
-                        onClick={() => handleToggleDT(p.id)}
-                        title={
-                          p.isDT
-                            ? "Quitar marca de DT"
-                            : "Tildar como Director Técnico (DT)"
-                        }
-                        className={`flex h-9 px-2 items-center justify-center rounded-xl border text-[11px] font-black transition active:scale-95 cursor-pointer ${
-                          p.isDT
-                            ? "border-emerald-400 bg-emerald-500 text-[#071433]"
-                            : "border-white/15 bg-white/8 text-blue-200/80 hover:border-emerald-400/60 hover:text-emerald-200"
-                        }`}
+                        onClick={() => handleDeletePhoto(p.id)}
+                        title="Eliminar foto"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-blue-200/60 transition active:scale-95 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-45 cursor-pointer"
                       >
-                        DT
+                        <Trash2 className="h-4 w-4" />
                       </button>
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => openEditModal(p)}
-                        title="Editar datos del jugador"
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-white transition active:scale-95 hover:border-[#D49B35]/60 hover:bg-[#D49B35]/20 hover:text-[#F5CE78]"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => triggerPhotoPicker(p.id)}
-                        title={p.photoUrl ? "Cambiar foto" : "Subir foto"}
-                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#D49B35]/40 bg-[#D49B35]/15 text-[#F5CE78] transition active:scale-95 hover:bg-[#D49B35]/25 disabled:opacity-45"
-                      >
-                        <Camera className="h-4 w-4" />
-                      </button>
-                      {p.photoUrl && (
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => handleDeletePhoto(p.id)}
-                          title="Eliminar foto"
-                          className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-blue-200/60 transition active:scale-95 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-45"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
